@@ -4,7 +4,8 @@ try:
     import sys
     import os
     import argparse
-    from utils import GeneralMethodsSecurity as gms
+    from utils.aux_functions import GeneralMethodsSecurity as gms
+    
 except ImportError:
     raise ImportError("Import failed. Try to install the dependencies by running: pip3 install -r requirements.txt")
 
