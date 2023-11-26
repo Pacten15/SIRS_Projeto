@@ -97,7 +97,7 @@ def verify_signature(decrypted_file_bytes, public_key_path, nonce_path):
     public_key = read_public_key(public_key_path)
 
     # Load the nonce
-    nonce = read_random_bytes_or_encrypted_files(nonce_path)
+    nonce = read_random_bytes_or_encrypted_files_bytes(nonce_path)
     
     # Load the decrypted file
     data = json.loads(decrypted_file_bytes.decode())
@@ -168,5 +168,36 @@ def encrypt_file(file_path, secret_key_path, iv):
     with open('encrypted_file', 'wb') as f:
         f.write(ciphered_data)
         f.close()
+
+
+#-------------------------------------------------------------------------#
+
+#functions refered in the Project Overview
+
+
+def protect(file_path,modified_file_name, public_key_path, secret_key_path):
+    nonce = create_nonce()
+    iv = create_iv()
+    list = [nonce, iv]
+    data = write_signature_to_file(file_path, public_key_path, nonce)
+    create_json_file(modified_file_name, data)
+    encrypt_file(data, secret_key_path, iv)
+    return list
+
+def unprotect(file_path, secret_key_path, iv_path):
+    decrypted_file_bytes = decrypt_file(file_path, secret_key_path, iv_path)
+    decrypted_data_readable = json.loads(decrypted_file_bytes)
+    new_file_path = file_path.split('.')[0] + '_decrypted.json'
+    create_json_file(new_file_path, decrypted_data_readable)
+     
+
+def check(file_path,public_key_path, nonce_path):
+    data = read_json_file(file_path)
+    
+     # Convert the JSON object to a byte array
+    jsonString = json.dumps(data ,indent=4)
+    documentBytes = jsonString.encode()
+
+    verify_signature(documentBytes, public_key_path , nonce_path)
 
 

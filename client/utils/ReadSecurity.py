@@ -36,6 +36,12 @@ def read_random_bytes_or_encrypted_files(file_path):
     f.close()
     return data
 
+def create_json_file(file_path, data):
+    with open(file_path, 'w') as f:
+        json.dump(data, f, indent=4, ensure_ascii=False)
+    f.close()
+
+
 
 def decrypt_file(file_path, secret_key_path, iv_path):
     # Load the secret key
@@ -49,7 +55,12 @@ def decrypt_file(file_path, secret_key_path, iv_path):
     decrypted_data = cipher.decrypt(encrypted_file)
     # Unpad the data
     original_data = unpad(decrypted_data, AES.block_size)
-    
+
+    original_data_readable = json.loads(original_data)
+
+    new_file_path = file_path.split('.')[0] + '_decrypted.json'
+
+    create_json_file(new_file_path, original_data_readable)
     return original_data
 
 def verify_signature(decrypted_file_bytes, public_key_path, nonce_path):
