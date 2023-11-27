@@ -26,6 +26,7 @@ def read_public_key(public_key_path):
             file_content = file.read()
         public_key = RSA.import_key(file_content)
         if public_key.has_private():
+            print(f"WARNING: Public key '{public_key_path}' contains private key.", file=sys.stderr)
             public_key = public_key.publickey()
     except (IOError, ValueError, TypeError):
         print(f"ERROR: Could not read public key from file '{public_key_path}'.", file=sys.stderr)
@@ -47,19 +48,22 @@ def encrypt(raw_content, src_private_key, dst_public_key):
     ciphertext = rsa_cipher.encrypt(gen_key+gen_cipher.iv)
     encrypted_key = b64encode(ciphertext).decode('utf-8')
 
+    nonce = get_random_bytes(16)
+
     # Create contents digest and sign
-    hashed = SHA256.new(raw_content)
+    hashed = SHA256.new(raw_content + nonce)
     signer = pkcs1_15.new(src_private_key)
     ciphertext = signer.sign(hashed)
     encrypted_hash = b64encode(ciphertext).decode('utf-8')
+    nonce = b64encode(nonce).decode('utf-8')
 
-    return encrypted_content + '|' + encrypted_key + '|' + encrypted_hash
+    return encrypted_content + '|' + encrypted_key + '|' + encrypted_hash + '|' + nonce
 
-def decrypt(encrypted_document, src_public_key, dst_private_key):
+def decrypt(encrypted_document, dst_private_key):
     ''' Decrypts encrypted_document using AES, AES key is found by decrypting
         with dst_private_key, the signature is checked using src_public_key,
         and the decrypted contents are returned directly.'''
-    encrypted_content, encrypted_key, encrypted_hash = encrypted_document.split('|')
+    encrypted_content, encrypted_key = encrypted_document.split('|')[:2]
     
     # Decrypt AES key and IV with private RSA key
     sentinel = get_random_bytes(32 + 16)
@@ -68,20 +72,49 @@ def decrypt(encrypted_document, src_public_key, dst_private_key):
     gen_key_iv = rsa_cipher.decrypt(ciphertext, sentinel, expected_pt_len=32 + 16)
     assert gen_key_iv != sentinel
     gen_key = gen_key_iv[:32]
-    gen_iv  = gen_key_iv[32:]
+    gen_iv  = gen_key_iv[32:32 + 16]
+    #gen_timestamp = gen_key_iv[32 + 16:]
 
     # Decrypt content with AES key and IV
     ciphertext = b64decode(encrypted_content.encode())
     gen_cipher = AES.new(gen_key, AES.MODE_CBC, gen_iv)
     raw_content = unpad(gen_cipher.decrypt(ciphertext), AES.block_size)
 
-    # Test raw_content with the signed digest
-    hashed = SHA256.new(raw_content)
+    return raw_content
+
+def verify_signature_decrypted_file(encrypted_document, decrypted_document, src_public_key):
+
+    encrypted_hash = encrypted_document.split('|')[2]
+    nonce = encrypted_document.split('|')[3]
+
+    ''' Verifies the signature of raw_content using src_public_key. '''
+    hashed = SHA256.new(decrypted_document.encode() + b64decode(nonce))
     signer = pkcs1_15.new(src_public_key)
     signature = b64decode(encrypted_hash.encode())
     signer.verify(hashed, signature)
 
-    return raw_content
+def verify_signature_encrypted_file(encrypted_document, decrypted_document, src_public_key, dst_private_key):
+    ''' Decrypts encrypted_document using AES, AES key is found by decrypting
+        with dst_private_key, the signature is checked using src_public_key,
+        and the decrypted contents are returned directly.'''
+    
+    encrypted_hash = encrypted_document.split('|')[2]
+    nonce = encrypted_document.split('|')[3]
+
+    decrypted_content = decrypt(encrypted_document, dst_private_key)
+
+    # Test raw_content with the signed digest
+    #have to decode raw content to bytes due to the decrypt function
+    hashed = SHA256.new(decrypted_content + b64decode(nonce))
+    signer = pkcs1_15.new(src_public_key)
+    signature = b64decode(encrypted_hash.encode())
+    
+    
+    signer.verify(hashed, signature)
+
+    
+
+
 
 # --- Below are the "exposed" functions ---
 
@@ -104,7 +137,7 @@ def protect(infile_path, src_private_key_path, dst_public_key_path, outfile_path
         print(f"ERROR: File '{outfile_path}' could not be written", file=sys.stderr)
         exit(1)
 
-def unprotect(infile_path, src_public_key_path, dst_private_key_path, outfile_path):
+def unprotect(infile_path, dst_private_key_path, outfile_path):
     try:
         with open(infile_path, 'r') as infile:
             encrypted_document = infile.read()
@@ -112,11 +145,10 @@ def unprotect(infile_path, src_public_key_path, dst_private_key_path, outfile_pa
         print(f"ERROR: File '{infile_path}' could not be read.", file=sys.stderr)
         exit(1)
 
-    src_public_key  = read_public_key(src_public_key_path)
     dst_private_key = read_private_key(dst_private_key_path)
 
     try:
-        raw_content = decrypt(encrypted_document, src_public_key, dst_private_key)
+        raw_content = decrypt(encrypted_document, dst_private_key)
     except (AssertionError, ValueError, KeyError):
         print("ERROR: Failed document decryption.", file=sys.stderr)
         exit(1)
@@ -128,22 +160,45 @@ def unprotect(infile_path, src_public_key_path, dst_private_key_path, outfile_pa
         print(f"ERROR: File '{outfile_path}' could not be written", file=sys.stderr)
         exit(1)
 
-def check(infile_path, src_public_key_path, dst_private_key_path):
+def check(infile_path, resfile_path, src_public_key_path, dst_private_key_path):
+
     try:
         with open(infile_path, 'r') as infile:
             encrypted_document = infile.read()
     except IOError:
         print(f"ERROR: File '{infile_path}' could not be read.", file=sys.stderr)
         exit(1)
-
-    src_public_key  = read_public_key(src_public_key_path)
-    dst_private_key = read_private_key(dst_private_key_path)
-
     try:
-        raw_content = decrypt(encrypted_document, src_public_key, dst_private_key)
-    except (AssertionError, ValueError, KeyError):
-        print("ERROR: Failed document verification.", file=sys.stderr)
+        with open(resfile_path, 'r') as infile:
+            dencrypted_document = infile.read()
+    except IOError:
+        print(f"ERROR: File '{infile_path}' could not be read.", file=sys.stderr)
         exit(1)
 
-    print("Document verified!")
-    exit(0)
+    if( dst_private_key_path == 'no'):
+        
+
+        src_public_key  = read_public_key(src_public_key_path)
+
+        try:
+            verify_signature_decrypted_file(encrypted_document, dencrypted_document, src_public_key)
+        except (AssertionError, ValueError, KeyError):
+            print("ERROR: Failed document verification.", file=sys.stderr)
+            exit(1)
+
+        print("Document verified!")
+        exit(0)
+    else:
+        src_public_key  = read_public_key(src_public_key_path)
+        dst_private_key = read_private_key(dst_private_key_path)
+
+        try:
+            verify_signature_encrypted_file(encrypted_document, dencrypted_document, src_public_key, dst_private_key)
+        except (AssertionError, ValueError, KeyError):
+            print("ERROR: Failed document verification.", file=sys.stderr)
+            exit(1)
+
+        print("Document verified!")
+        exit(0)
+        
+        
