@@ -83,20 +83,19 @@ def decrypt(encrypted_document, dst_private_key):
     return raw_content
 
 def verify_signature_decrypted_file(encrypted_document, decrypted_document, src_public_key):
-
+    ''' Verifies the signature of the decrypted file using src_public_key. '''
     encrypted_hash = encrypted_document.split('|')[2]
     nonce = encrypted_document.split('|')[3]
 
-    ''' Verifies the signature of raw_content using src_public_key. '''
+    
     hashed = SHA256.new(decrypted_document.encode() + b64decode(nonce))
     signer = pkcs1_15.new(src_public_key)
     signature = b64decode(encrypted_hash.encode())
     signer.verify(hashed, signature)
 
 def verify_signature_encrypted_file(encrypted_document, decrypted_document, src_public_key, dst_private_key):
-    ''' Decrypts encrypted_document using AES, AES key is found by decrypting
-        with dst_private_key, the signature is checked using src_public_key,
-        and the decrypted contents are returned directly.'''
+    ''' Verifies the signature of the encrypted file  using src_public_key and the dst_private_key to use in the  
+     decryption of the file'''
     
     encrypted_hash = encrypted_document.split('|')[2]
     nonce = encrypted_document.split('|')[3]
