@@ -56,7 +56,7 @@ def encrypt(raw_content, src_private_key, dst_public_key):
 
     return {"encrypted_content": encrypted_content, "encrypted_key": encrypted_key, "encrypted_hash": encrypted_hash}
 
-def decrypt(encrypted_document, src_public_key, dst_private_key):
+def decrypt(encrypted_document, src_public_key, dst_private_key, nonces):
     ''' Decrypts encrypted_document using AES, AES key is found by decrypting
         with dst_private_key, the signature is checked using src_public_key,
         and the decrypted contents are returned directly.'''
@@ -73,16 +73,18 @@ def decrypt(encrypted_document, src_public_key, dst_private_key):
     gen_key = gen_key_iv[:32]
     gen_iv  = gen_key_iv[32:]
 
-    # Decrypt content with AES key and IV
-    ciphertext = b64decode(encrypted_content.encode())
-    gen_cipher = AES.new(gen_key, AES.MODE_CBC, gen_iv)
-    raw_content = unpad(gen_cipher.decrypt(ciphertext), AES.block_size)
-
     # Test raw_content with the signed digest
     hashed = SHA256.new(encrypted_content.encode('utf-8'))
     signer = pkcs1_15.new(src_public_key)
     signature = b64decode(encrypted_hash.encode())
     signer.verify(hashed, signature)
+    assert signature.hex() not in nonces
+    nonces.append(signature.hex())
+
+    # Decrypt content with AES key and IV
+    ciphertext = b64decode(encrypted_content.encode())
+    gen_cipher = AES.new(gen_key, AES.MODE_CBC, gen_iv)
+    raw_content = unpad(gen_cipher.decrypt(ciphertext), AES.block_size)
 
     return raw_content
 
@@ -126,10 +128,22 @@ def unprotect(infile_path, src_public_key_path, dst_private_key_path, outfile_pa
     dst_private_key = read_private_key(dst_private_key_path)
 
     try:
-        raw_content = decrypt(encrypted_document, src_public_key, dst_private_key)
+        with open('seen_nonces.autogen.json', 'r') as nonces_file:
+            nonces = json.load(nonces_file)
+    except IOError:
+        nonces = []
+
+    try:
+        raw_content = decrypt(encrypted_document, src_public_key, dst_private_key, nonces)
     except (AssertionError, ValueError, KeyError):
         print("ERROR: Failed document decryption.", file=sys.stderr)
         exit(1)
+
+    try:
+        with open('seen_nonces.autogen.json', 'w') as nonces_file:
+            json.dump(nonces, nonces_file)
+    except IOError:
+        print("WARNING: Could not store nonce to 'seen_nonces.autogen.json'.", file=sys.stderr)
 
     try:
         json.loads(raw_content)
@@ -157,7 +171,13 @@ def check(infile_path, src_public_key_path, dst_private_key_path):
     dst_private_key = read_private_key(dst_private_key_path)
 
     try:
-        decrypt(encrypted_document, src_public_key, dst_private_key)
+        with open('seen_nonces.autogen.json', 'r') as nonces_file:
+            nonces = json.load(nonces_file)
+    except IOError:
+        nonces = []
+
+    try:
+        decrypt(encrypted_document, src_public_key, dst_private_key, nonces)
     except (AssertionError, ValueError, KeyError):
         print("ERROR: Failed document verification.", file=sys.stderr)
         exit(1)

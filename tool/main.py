@@ -32,7 +32,7 @@ def main():
         print_help()
         exit(0)
 
-    if (len(sys.argv) < 5 and action != 'check') or len(sys.argv) < 6: # name, action, input, src, dst, output
+    if (len(sys.argv) < 6 and action != 'check') or len(sys.argv) < 5: # name, action, input, src, dst, output
         print_help()
         print("\nERROR: missing arguments", file=sys.stderr)
         exit(1)
