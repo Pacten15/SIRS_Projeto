@@ -41,6 +41,7 @@ def main():
 
     if action == 'check':
         BA.check(infile_path, src_key_path, dst_key_path)
+        exit(0)
 
     outfile_path = sys.argv[5]
 
