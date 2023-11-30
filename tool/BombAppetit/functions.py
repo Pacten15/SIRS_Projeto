@@ -48,22 +48,21 @@ def encrypt(raw_content, src_private_key, dst_public_key):
     ciphertext = rsa_cipher.encrypt(gen_key+gen_cipher.iv)
     encrypted_key = b64encode(ciphertext).decode('utf-8')
 
-    nonce = get_random_bytes(16)
-
     # Create contents digest and sign
-    hashed = SHA256.new(raw_content + nonce)
+    hashed = SHA256.new(encrypted_content.encode('utf-8'))
     signer = pkcs1_15.new(src_private_key)
     ciphertext = signer.sign(hashed)
     encrypted_hash = b64encode(ciphertext).decode('utf-8')
-    nonce = b64encode(nonce).decode('utf-8')
 
-    return encrypted_content + '|' + encrypted_key + '|' + encrypted_hash + '|' + nonce
+    return {"encrypted_content": encrypted_content, "encrypted_key": encrypted_key, "encrypted_hash": encrypted_hash}
 
-def decrypt(encrypted_document, dst_private_key):
+def decrypt(encrypted_document, src_public_key, dst_private_key):
     ''' Decrypts encrypted_document using AES, AES key is found by decrypting
         with dst_private_key, the signature is checked using src_public_key,
         and the decrypted contents are returned directly.'''
-    encrypted_content, encrypted_key = encrypted_document.split('|')[:2]
+    encrypted_content = encrypted_document['encrypted_content']
+    encrypted_key = encrypted_document['encrypted_key']
+    encrypted_hash = encrypted_document['encrypted_hash']
     
     # Decrypt AES key and IV with private RSA key
     sentinel = get_random_bytes(32 + 16)
@@ -72,48 +71,20 @@ def decrypt(encrypted_document, dst_private_key):
     gen_key_iv = rsa_cipher.decrypt(ciphertext, sentinel, expected_pt_len=32 + 16)
     assert gen_key_iv != sentinel
     gen_key = gen_key_iv[:32]
-    gen_iv  = gen_key_iv[32:32 + 16]
-    #gen_timestamp = gen_key_iv[32 + 16:]
+    gen_iv  = gen_key_iv[32:]
 
     # Decrypt content with AES key and IV
     ciphertext = b64decode(encrypted_content.encode())
     gen_cipher = AES.new(gen_key, AES.MODE_CBC, gen_iv)
     raw_content = unpad(gen_cipher.decrypt(ciphertext), AES.block_size)
 
-    return raw_content
-
-def verify_signature_decrypted_file(encrypted_document, decrypted_document, src_public_key):
-    ''' Verifies the signature of the decrypted file using src_public_key. '''
-    encrypted_hash = encrypted_document.split('|')[2]
-    nonce = encrypted_document.split('|')[3]
-
-    
-    hashed = SHA256.new(decrypted_document.encode() + b64decode(nonce))
-    signer = pkcs1_15.new(src_public_key)
-    signature = b64decode(encrypted_hash.encode())
-    signer.verify(hashed, signature)
-
-def verify_signature_encrypted_file(encrypted_document, decrypted_document, src_public_key, dst_private_key):
-    ''' Verifies the signature of the encrypted file  using src_public_key and the dst_private_key to use in the  
-     decryption of the file'''
-    
-    encrypted_hash = encrypted_document.split('|')[2]
-    nonce = encrypted_document.split('|')[3]
-
-    decrypted_content = decrypt(encrypted_document, dst_private_key)
-
     # Test raw_content with the signed digest
-    #have to decode raw content to bytes due to the decrypt function
-    hashed = SHA256.new(decrypted_content + b64decode(nonce))
+    hashed = SHA256.new(encrypted_content.encode('utf-8'))
     signer = pkcs1_15.new(src_public_key)
     signature = b64decode(encrypted_hash.encode())
-    
-    
     signer.verify(hashed, signature)
 
-    
-
-
+    return raw_content
 
 # --- Below are the "exposed" functions ---
 
@@ -121,8 +92,12 @@ def protect(infile_path, src_private_key_path, dst_public_key_path, outfile_path
     try:
         with open(infile_path, 'rb') as infile:
             raw_content = infile.read()
+        json.loads(raw_content)
     except IOError:
         print(f"ERROR: File '{infile_path}' could not be read.", file=sys.stderr)
+        exit(1)
+    except json.decoder.JSONDecodeError:
+        print(f"ERROR: File '{infile_path}' is not a proper JSON file.", file=sys.stderr)
         exit(1)
 
     src_private_key = read_private_key(src_private_key_path)
@@ -131,73 +106,60 @@ def protect(infile_path, src_private_key_path, dst_public_key_path, outfile_path
     encrypted_document = encrypt(raw_content, src_private_key, dst_public_key)
     try:
         with open(outfile_path, 'w') as outfile:
-            outfile.write(encrypted_document)
+            json.dump(encrypted_document, outfile)
     except IOError:
         print(f"ERROR: File '{outfile_path}' could not be written", file=sys.stderr)
         exit(1)
 
-def unprotect(infile_path, dst_private_key_path, outfile_path):
+def unprotect(infile_path, src_public_key_path, dst_private_key_path, outfile_path):
     try:
         with open(infile_path, 'r') as infile:
-            encrypted_document = infile.read()
+            encrypted_document = json.load(infile)
     except IOError:
         print(f"ERROR: File '{infile_path}' could not be read.", file=sys.stderr)
         exit(1)
+    except json.decoder.JSONDecodeError:
+        print(f"ERROR: File '{infile_path}' is not a proper JSON file.", file=sys.stderr)
+        exit(1)
 
+    src_public_key  = read_public_key(src_public_key_path)
     dst_private_key = read_private_key(dst_private_key_path)
 
     try:
-        raw_content = decrypt(encrypted_document, dst_private_key)
+        raw_content = decrypt(encrypted_document, src_public_key, dst_private_key)
     except (AssertionError, ValueError, KeyError):
         print("ERROR: Failed document decryption.", file=sys.stderr)
         exit(1)
 
     try:
+        json.loads(raw_content)
         with open(outfile_path, 'wb') as outfile:
             outfile.write(raw_content)
     except IOError:
         print(f"ERROR: File '{outfile_path}' could not be written", file=sys.stderr)
         exit(1)
+    except json.decoder.JSONDecodeError:
+        print(f"ERROR: Decrypted file '{infile_path}' is not a proper JSON file.", file=sys.stderr)
+        exit(1)
 
-def check(infile_path, resfile_path, src_public_key_path, dst_private_key_path):
-
+def check(infile_path, src_public_key_path, dst_private_key_path):
     try:
         with open(infile_path, 'r') as infile:
-            encrypted_document = infile.read()
+            encrypted_document = json.load(infile)
     except IOError:
         print(f"ERROR: File '{infile_path}' could not be read.", file=sys.stderr)
         exit(1)
+    except json.decoder.JSONDecodeError:
+        print(f"ERROR: File '{infile_path}' is not a proper JSON file.", file=sys.stderr)
+        exit(1)
+
+    src_public_key  = read_public_key(src_public_key_path)
+    dst_private_key = read_private_key(dst_private_key_path)
+
     try:
-        with open(resfile_path, 'r') as infile:
-            dencrypted_document = infile.read()
-    except IOError:
-        print(f"ERROR: File '{infile_path}' could not be read.", file=sys.stderr)
+        decrypt(encrypted_document, src_public_key, dst_private_key)
+    except (AssertionError, ValueError, KeyError):
+        print("ERROR: Failed document verification.", file=sys.stderr)
         exit(1)
 
-    if( dst_private_key_path == 'no'):
-        
-
-        src_public_key  = read_public_key(src_public_key_path)
-
-        try:
-            verify_signature_decrypted_file(encrypted_document, dencrypted_document, src_public_key)
-        except (AssertionError, ValueError, KeyError):
-            print("ERROR: Failed document verification.", file=sys.stderr)
-            exit(1)
-
-        print("Document verified!")
-        exit(0)
-    else:
-        src_public_key  = read_public_key(src_public_key_path)
-        dst_private_key = read_private_key(dst_private_key_path)
-
-        try:
-            verify_signature_encrypted_file(encrypted_document, dencrypted_document, src_public_key, dst_private_key)
-        except (AssertionError, ValueError, KeyError):
-            print("ERROR: Failed document verification.", file=sys.stderr)
-            exit(1)
-
-        print("Document verified!")
-        exit(0)
-        
-        
+    print("Document verified!")
