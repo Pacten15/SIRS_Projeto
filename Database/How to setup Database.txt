@@ -77,6 +77,12 @@ digita a password: postgres
 E tens acesso à db diretamente, no entanto para modificações na tabela já é preciso as credenciais do user criado.
 
 
+Para alterar as configurações de rede da database hosted basta fazer:
+
+
+sudo nano /path/to/pg_hba.conf
+
+Alterar este ficheiro trocando o address do postgres com o address de uma das vm(por testar).
 
 
 	

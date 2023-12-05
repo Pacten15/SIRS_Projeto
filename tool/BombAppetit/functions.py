@@ -108,7 +108,7 @@ def protect(infile_path, src_private_key_path, dst_public_key_path, outfile_path
     encrypted_document = encrypt(raw_content, src_private_key, dst_public_key)
     try:
         with open(outfile_path, 'w') as outfile:
-            json.dump(encrypted_document, outfile)
+            json.dump(encrypted_document, outfile, indent=3)
     except IOError:
         print(f"ERROR: File '{outfile_path}' could not be written", file=sys.stderr)
         exit(1)
