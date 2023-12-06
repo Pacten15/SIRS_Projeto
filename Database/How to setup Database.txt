@@ -12,7 +12,7 @@ sudo systemctl enable postgresql
 
 Instalação da librarie de python que consegue manipular base de dados postgresSQL
 
-pip3 install pyn
+pip3 install psycopg2
 
 
 Como criar uma base de dados:
@@ -26,6 +26,11 @@ Como criar uma base de dados:
 	CREATE USER luis WITH PASSWORD '123';
 
 	CREATE DATABASE documents WITH OWNER luis ENCODING='UTF8' LC_COLLATE='pt_PT.utf8' LC_CTYPE='pt_PT.utf8' TEMPLATE=template0;
+
+Passar luis para super user
+
+ALTER luis TO SUPERUSER
+
 
 
 Alterar a linguagem reconhecida pelo servidor, para português já que a imagem do kali instalada vem com o inglês americano e quando fosse para enfiar os documentos na base de dados poderia haver problemas associados a por exemplo ao 'ç' entre outros caracteres.
@@ -79,10 +84,42 @@ E tens acesso à db diretamente, no entanto para modificações na tabela já é
 
 Para alterar as configurações de rede da database hosted basta fazer:
 
+sudo nano /etc/postgresql/16/main/pg_hba.conf
 
-sudo nano /path/to/pg_hba.conf
+Alterar este ficheiro trocando o address do postgres com o address de uma das vm(por testar) por baixo do ultimo host.
 
-Alterar este ficheiro trocando o address do postgres com o address de uma das vm(por testar).
+host    all             all             192.168.0.10/24         md5
+
+alterar o ficheiro postgres.conf
+
+sudo nano /etc/postgresql/16/main/postgres.conf
+
+Substiutir a linha
+
+#listen_addresses = 'localhost'
+
+para
+
+listen_addresses = '192.168.0.10'
+
+Asseguir fazer restart da db
+
+sudo su postgres
+
+systemctl restart postgres
+
+
+
+
+
+
+
+
+Ordem de Execução dos ficheiro .py da database
+
+1º database.py 
+
+2º AddJsonFile.py
 
 
 	

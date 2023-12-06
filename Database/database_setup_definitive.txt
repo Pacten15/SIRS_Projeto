@@ -1,0 +1,178 @@
+The VM's used already have postgres installed
+
+What could be missing is the library psycopg2
+
+To install it use this command:
+
+pip3 install psycopg2
+
+
+
+In The host VM that in case of study was VM1:   
+
+Which has this /etc/network/interfaces file:
+
+# This file describes the network interfaces available on your system
+# and how to activate them. For more information, see interfaces(5).
+
+source /etc/network/interfaces.d/*
+
+# The loopback network interface and sw-1 interface
+auto lo eth0 eth1
+iface lo inet loopback
+
+iface eth0 inet static
+        address 192.168.0.100
+        netmask 255.255.255.0
+
+iface eth1 inet dhcp
+        address 10.0.3.2
+        gateaway 8.8.8.8
+
+The server connecting to the database  hosted in VM1 is VM2 being in this case his /etc/network/interfaces is:
+
+
+
+# This file describes the network interfaces available on your system
+# and how to activate them. For more information, see interfaces(5).
+
+source /etc/network/interfaces.d/*
+
+# The loopback network interface, sw-1 interface and sw-2 interface
+auto lo eth0 eth1 eth2
+iface lo inet loopback
+
+iface eth0 inet static
+        address 192.168.0.10
+        netmask 255.255.255.0
+
+iface eth1 inet static
+        address 192.168.1.254
+        netmask 255.255.255.0
+
+iface eth2 inet dhcp
+        address 10.0.4.2
+        gateaway 8.8.8.8
+
+
+
+
+
+
+Afterwards initizialize super user and go to the directory where postgres is installed:
+
+Configure Connection between the VM's for VM2 to connect to the DB in VM1
+
+For that we need to config this configuration on the VM1:
+
+    Change file /etc/postgresql/16/main/postgresql.conf so we define the ip address listing for request for the 
+                                                        database being in this case on of the ip belonging to the VM1 and that is
+                                                         also recognized by the VM1 explained in the Infrastructure (to be done) 
+
+    sudo nano /etc/postgresql/16/main/postgresql.conf
+
+    where is 
+
+    #listen_addresses = 'localhost'     # what IP address(es) to listen on;
+
+    to
+
+    listen_addresses = '192.168.0.100'  # what IP address(es) to listen on;
+
+
+    Change file /etc/postgres/16/main/pg_hba.conf to add the ip allowed to acess the database in this case we will put the ip of the vm2 that 
+                                                        v1 also knows it's existance (Config will explain when done)
+
+    # Database administrative login by Unix domain socket
+    local   all             postgres                                peer
+
+    # TYPE  DATABASE        USER            ADDRESS                 METHOD
+
+    # "local" is for Unix domain socket connections only
+    local   all             all                                     peer
+    # IPv4 local connections:
+    host    all             all             127.0.0.1/32            scram-sha-256
+
+    host    all             all             192.168.0.10/24         scram-sha-256
+    # IPv6 local connections:
+    host    all             all             ::1/128                 scram-sha-256
+
+
+
+
+On VM1:
+
+sudo su postgres
+
+initiate postgresql:
+
+psql -U postgres -p 5433 -W
+
+If the it isn´t the port 5433 verify in this file by doing this after only executing only psql:
+
+    tail -n 50 /var/log/postgresql/postgresql-16-main.log
+
+    this will show in which database port the ip was associated
+
+
+create a new user:
+
+CREATE USER luis WITH PASSWORD '123';
+
+Convert postgresql and kali to portuguese so json files can be read properly
+
+sudo localedef -i pt_PT -f UTF-8 pt_PT.UTF-8
+
+make change permanent:
+
+modify file located on /etc/locale.conf
+
+change line to:
+    LANG=pt_PT.UTF-8
+
+create a database:
+
+CREATE DATABASE documents WITH OWNER luis ENCODING='UTF8' LC_COLLATE='pt_PT.utf8' LC_CTYPE='pt_PT.utf8' TEMPLATE=template0;
+
+Give Permissions to the user created
+
+ALTER USER luis WITH SUPERUSER;
+
+GRANT pg_read_all_data TO luis;
+
+GRANT pg_write_all_data TO luis;
+
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO luis;
+
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO luis;
+
+
+exit
+
+Verify if the user luis and documents was created properly:
+
+    psql -U luis -d documents -h 192.168.0.100  -p 5433 -W
+
+In VM2:
+
+    Enter into the documents database of VM1:
+
+    psql -U luis -d documents -h 192.168.0.100  -p 5433 -W
+
+And Now the VM2 has acess to the VM1 database
+
+
+By executing the py files in this order the changes in the database will appear in the VM1 this is a temporary solution of course:
+
+create_database_table.py -> create a table in the database
+
+AddJsonFileToTable.py -> add example.json to the VM1 database via vm2
+
+
+
+
+
+
+
+
+
