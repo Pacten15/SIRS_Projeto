@@ -33,6 +33,24 @@ def read_public_key(public_key_path):
         exit(1)
     return public_key
 
+def create_key_pair(key_size, public_key_path, private_key_path):
+    ''' Creates a RSA key pair of the given key_size in bytes and writes the public key and private key to separate files. '''
+    try:
+        key = RSA.generate(key_size)
+    except ValueError:
+        print(f"ERROR: Invalid key size '{key_size}'.", file=sys.stderr)
+        exit(1)
+    
+    # Write public key to file
+    with open(public_key_path, 'wb') as public_key_file:
+        public_key_file.write(key.publickey().export_key())
+
+    # Write private key to file
+    with open(private_key_path, 'wb') as private_key_file:
+        private_key_file.write(key.export_key())
+    
+    return key
+
 def encrypt(raw_content, src_private_key, dst_public_key):
     ''' Encrypts content using generated AES key, AES key will be encrypted
         with dst_public_key for confidentiality, the contents will be hashed,
