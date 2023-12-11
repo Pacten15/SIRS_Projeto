@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title>{% block title %}{% endblock %} :: BombAppetit</title>
+	<!--link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"-->
+	<link rel="shortcut icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABAAQMAAACQp+OdAAAABlBMVEUAAADjAAAOw9c2AAAAAXRSTlMAQObYZgAAAMBJREFUeNq90bFNw1AYhdHz9BBukM0AkZ0xUkTYEgPh0kVE3mipmMMSC7igcGHlp8AVA+RWp76fR+0TUMUC9LEBEQHSWkWBXPQzVDQLvJBXXFes5PsrLnTzEWd6R7RsoJVWA2p5BrXqZkfZ0djRAS9ausLBG4GTs7RgdJFvGEyqgmLSSBKTOkfcGLV9xJ3FIXb0O1xnakYrnhnNf5hS2ZHp44vTkxzxw5kuNrSGiILGeyxQfX/cQdqu87+TDY/K+gv5BEoZelpfrQAAAABJRU5ErkJggg==">
+	<style>
+html {
+	background: #ffe;
+}
+
+textarea, td {
+	text-align: center;
+}
+
+body {
+	font-family: "Noto Sans", sans-serif;
+	max-width: 90%;
+	margin: 20px auto;
+	color:#444;
+}
+
+table {
+	margin: auto;
+}
+
+table, th, td {
+	border: 1px solid black;
+}
+
+@media (prefers-color-scheme: dark) {
+	html {
+		background: #111;
+	}
+
+	body {
+		color: #ddd;
+	}
+
+	textarea {
+		background: #112;
+	}
+
+	a:link {
+		color: #58a6ff;
+	}
+
+	a:visited {
+		color: #8e96f0;
+	}
+}
+	</style>
+</head>
+
+<body>
+	{% block content %}{% endblock %}
+
+	<script>
+	{% block script %}{% endblock %}
+	</script>
+</body>
+</html>
+
