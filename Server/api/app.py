@@ -14,7 +14,7 @@ database = psycopg2.connect(host="127.0.0.1", database="sirs_bombappetit", user=
 
 private_rsa = RSA.generate(2048)
 CREATE_TABLES = ("CREATE TABLE IF NOT EXISTS ba_restaurants ( id SERIAL PRIMARY KEY, data JSONB NOT NULL );"
-                 "CREATE TABLE IF NOT EXISTS ba_users (name TEXT PRIMARY KEY, public_key TEXT );"
+                 "CREATE TABLE IF NOT EXISTS ba_users ( name TEXT PRIMARY KEY, public_key TEXT );"
                  "CREATE TABLE IF NOT EXISTS ba_vouchers ("
                             "code          TEXT PRIMARY KEY,"
                             "description   TEXT NOT NULL,"
@@ -23,7 +23,7 @@ CREATE_TABLES = ("CREATE TABLE IF NOT EXISTS ba_restaurants ( id SERIAL PRIMARY 
                  ");"
                  "CREATE TABLE IF NOT EXISTS ba_reviews ("
                             "rating        INTEGER NOT NULL,"
-                            "description   TEXT,"
+                            "comment       TEXT,"
                             "restaurant_id SERIAL REFERENCES ba_restaurants (id),"
                             "user_name     TEXT REFERENCES ba_users (name),"
                             "UNIQUE (restaurant_id, user_name)"
@@ -284,13 +284,13 @@ def delete_voucher():
 
 @app.post("/api/reviews")
 def create_review():
-    INSERT_REVIEW = "INSERT INTO ba_reviews (rating, description, restaurant_id, user_name) VALUES (%s, %s, %s, %s);"
+    INSERT_REVIEW = "INSERT INTO ba_reviews (rating, comment, restaurant_id, user_name) VALUES (%s, %s, %s, %s);"
 
     data = request.get_json()
     user_name = data.get('user_name')
     restaurant_id = data.get('restaurant_id')
     rating = data.get('rating')
-    description = data.get('description')
+    comment = data.get('comment')
 
     if user_name is None:
         return { "message": "Missing user_name parameter" }, 400
@@ -301,8 +301,8 @@ def create_review():
     if rating is None:
         return { "message": "Missing rating parameter" }, 400
 
-    if description is None:
-        return { "message": "Missing description parameter" }, 400
+    if comment is None:
+        return { "message": "Missing comment parameter" }, 400
 
     if rating < 1 or rating > 5:
         return { "message": "Rating must be between 1 and 5 stars" }, 400
@@ -330,7 +330,7 @@ def read_reviews():
         with database, database.cursor() as db:
             db.execute(SELECT_REVIEWS, (restaurant_id, user_name))
             reviews = db.fetchall()
-            review_data = list( { "rating": r[0], "description": r[1], "restaurant_id": r[2], "user_name": r[3] } for r in reviews )
+            review_data = list( { "rating": r[0], "comment": r[1], "restaurant_id": r[2], "user_name": r[3] } for r in reviews )
     except psycopg2.errors.ForeignKeyViolation:
         return { "message": "user_name or restaurant_id not found" }, 404
 
@@ -338,13 +338,13 @@ def read_reviews():
 
 @app.put("/api/reviews")
 def update_review():
-    UPDATE_REVIEW = "UPDATE ba_reviews SET rating = (%s), description = (%s) WHERE restaurant_id = (%s) AND user_name = (%s);"
+    UPDATE_REVIEW = "UPDATE ba_reviews SET rating = (%s), comment = (%s) WHERE restaurant_id = (%s) AND user_name = (%s);"
 
     data = request.get_json()
     user_name = data.get('user_name')
     restaurant_id = data.get('restaurant_id')
     rating = data.get('rating')
-    description = data.get('description')
+    comment = data.get('comment')
 
     if user_name is None:
         return { "message": "Missing user_name parameter" }, 400
@@ -355,14 +355,14 @@ def update_review():
     if rating is None:
         return { "message": "Missing rating parameter" }, 400
 
-    if description is None:
-        return { "message": "Missing description parameter" }, 400
+    if comment is None:
+        return { "message": "Missing comment parameter" }, 400
 
     if rating < 1 or rating > 5:
         return { "message": "Rating must be between 1 and 5 stars" }, 400
 
     with database, database.cursor() as db:
-        db.execute(UPDATE_REVIEW, (rating, description, restaurant_id, user_name))
+        db.execute(UPDATE_REVIEW, (rating, comment, restaurant_id, user_name))
         database.commit()
         effect = db.rowcount
 
