@@ -3,6 +3,7 @@ from flask import Flask
 from flask import request
 from flask import url_for
 from flask import render_template
+from sshtunnel import SSHTunnelForwarder
 
 from Crypto.PublicKey import RSA
 
@@ -10,7 +11,16 @@ import json
 import psycopg2
 
 app = Flask(__name__)
-database = psycopg2.connect(host="127.0.0.1", database="sirs_bombappetit", user="sirs_dbadmin", password="sirs_dbpassword")
+
+tunnel =  SSHTunnelForwarder(
+        ("192.168.0.100", 22),
+        ssh_username="kali",
+        ssh_password="kali",
+        remote_bind_address=('192.168.0.100', 5432))
+
+tunnel.start()
+
+database = psycopg2.connect(host="192.168.0.100", database="sirs_bombappetit", user="sirs_dbadmin", password="sirs_dbpassword")
 
 private_rsa = RSA.generate(2048)
 CREATE_TABLES = ("CREATE TABLE IF NOT EXISTS ba_restaurants ( id SERIAL PRIMARY KEY, data JSONB NOT NULL );"
@@ -19,7 +29,7 @@ CREATE_TABLES = ("CREATE TABLE IF NOT EXISTS ba_restaurants ( id SERIAL PRIMARY 
                             "code          TEXT PRIMARY KEY,"
                             "description   TEXT NOT NULL,"
                             "restaurant_id SERIAL REFERENCES ba_restaurants (id),"
-                            "user_name     TEXT REFERENCES ba_usesr (name)"
+                            "user_name     TEXT REFERENCES ba_users (name)"
                  ");"
                  "CREATE TABLE IF NOT EXISTS ba_reviews ("
                             "rating        INTEGER NOT NULL,"
@@ -154,7 +164,7 @@ def read_user(user_name):
 
 @app.put("/api/users/<user_name>")
 def update_user(user_name):
-    update_user = "update ba_users set public_key = (%s) where name = (%s);"
+    UPDATE_USER = "UPDATE ba_users SET public_key = (%s) WHERE name = (%s);"
 
     data = request.get_json()
     public_key = data.get('public_key')
@@ -164,7 +174,7 @@ def update_user(user_name):
         database.commit()
         effect = db.rowcount
 
-    if user:
+    if effect > 0:
         return { "message": f"User {user_name} updated successfully" }, 200
     else:
         return { "message": f"User {user_name} not found" }, 404
@@ -309,7 +319,7 @@ def create_review():
 
     try:
         with database, database.cursor() as db:
-            db.execute(INSERT_REVIEW, (rating, description, restaurant_id, user_name))
+            db.execute(INSERT_REVIEW, (rating, comment, restaurant_id, user_name))
     except psycopg2.errors.ForeignKeyViolation:
         return { "message": "user_name or restaurant_id not found" }, 404
 
@@ -386,7 +396,7 @@ def delete_review():
         return { "message": "Missing restaurant_id parameter" }, 400
  
     with database, database.cursor() as db:
-        db.execute(DELETE_VOUCHER, (restaurant_id, user_name))
+        db.execute(DELETE_REVIEW, (restaurant_id, user_name))
         database.commit()
         effect = db.rowcount
 

@@ -1,11 +1,20 @@
-The VM's used already have postgres installed
 
-What could be missing is the library psycopg2
 
-To install it use this command:
+How to setup Database:
+
+postgresSQL version: 16.1
+
+inicializar o postgres no kali:
+
+sudo systemctl start postgresql
+
+inicializar o postgres sempre que arrancar com o kali:
+
+sudo systemctl enable postgresql
+
+Instalação da librarie de python que consegue manipular base de dados postgresSQL
 
 pip3 install psycopg2
-
 
 
 In The host VM that in case of study was VM1:   
@@ -119,20 +128,9 @@ create a new user:
 
 CREATE USER luis WITH PASSWORD '123';
 
-Convert postgresql and kali to portuguese so json files can be read properly
-
-sudo localedef -i pt_PT -f UTF-8 pt_PT.UTF-8
-
-make change permanent:
-
-modify file located on /etc/locale.conf
-
-change line to:
-    LANG=pt_PT.UTF-8
-
 create a database:
 
-CREATE DATABASE documents WITH OWNER luis ENCODING='UTF8' LC_COLLATE='pt_PT.utf8' LC_CTYPE='pt_PT.utf8' TEMPLATE=template0;
+CREATE DATABASE documents WITH OWNER luis ENCODING='UTF8' 
 
 Give Permissions to the user created
 

@@ -106,7 +106,7 @@ Asseguir fazer restart da db
 
 sudo su postgres
 
-systemctl restart postgres
+systemctl restart postgresql
 
 
 
