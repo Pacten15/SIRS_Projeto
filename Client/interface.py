@@ -25,6 +25,7 @@ class ClientInterface:
         self.authenticated = False
 
     def register_user(self, username, password):
+
         try:
             # Create key pair
             public_key, private_key = create_key_pair()
@@ -127,6 +128,11 @@ class ClientInterface:
 
     def run_interface(self):
         while True:
+
+            self.register_user(self.username, self.password)
+
+            self.authenticate()
+
             self.help_command()
 
             choice = input("Enter your choice: ")
