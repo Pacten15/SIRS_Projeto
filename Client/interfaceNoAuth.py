@@ -1,7 +1,10 @@
 import json
 import requests
-from SIRS_Projeto.tool.BombAppetit.functions import create_key_pair
-from SIRS_Projeto.tool.main import main as cryptography_tool
+import sys
+sys.path.append('../tool/BombAppetit')
+
+from functions import create_key_pair
+from functions import encrypt
 
 
 def read_json_file(file_path):
@@ -17,53 +20,35 @@ def read_json_file(file_path):
             return None
     
 class ClientInterface:
-    def __init__(self, base_url , username, password):
+    def __init__(self, base_url , username):
         self.base_url = base_url
         self.username = username
-        self.password = password
-        self.auth = (self.username, self.password)
-        self.authenticated = False
 
-    def register_user(self, username, password):
+    def register_user(self, username):
 
         try:
             # Create key pair
-            public_key, private_key = create_key_pair()
+            keys = create_key_pair(2048, 'keys/' + username + '.pubkey', 'keys/' + username + '.privkey')
+
+            public_key = keys[0]
 
             # Create user data dictionary
             user_data = {
-                'username': username,
-                'password': password,
+                'name': username,
                 'public_key': public_key
             }
 
-            response = requests.post(self.base_url + '/register', json=user_data, auth=self.auth)
+            response = requests.post(self.base_url + '/users', json=user_data)
             return response.status_code
         except requests.exceptions.RequestException as e:
             print("Error: Failed to connect to remote server.", e)
             return None
 
-    def authenticate(self):
-        try:
-            response = requests.get(self.base_url + '/authenticate', auth=self.auth)
-            if response.status_code == 200:
-                self.authenticated = True
-                print("Authentication successful.")
-            else:
-                print("Authentication failed. Status code:", response.status_code)
-        except requests.exceptions.RequestException as e:
-            print("Error: Failed to connect to remote server.", e)
-
-    def is_authenticated(self):
-        return self.authenticated
 
     def read_remote_json_file(self, file_path):
         try:
-            if not self.is_authenticated():
-                print("Authentication required.")
-                return None
 
-            response = requests.get(self.base_url + '/read/' + file_path, auth=self.auth)
+            response = requests.get(self.base_url + '/read/' + file_path)
             if response.status_code == 200:
                 data = response.json()
                 return data
@@ -76,11 +61,7 @@ class ClientInterface:
 
     def update_remote_json_file(self, file_path, data):
         try:
-            if not self.is_authenticated():
-                print("Authentication required.")
-                return None
-
-            response = requests.put(self.base_url + '/update/' + file_path, json=data, auth=self.auth)
+            response = requests.put(self.base_url + '/update/' + file_path, json=data)
             return response.status_code
         except requests.exceptions.RequestException as e:
             print("Error: Failed to connect to remote server.", e)
@@ -88,11 +69,7 @@ class ClientInterface:
 
     def delete_remote_json_file(self, file_path):
         try:
-            if not self.is_authenticated():
-                print("Authentication required.")
-                return None
-
-            response = requests.delete(self.base_url + '/delete/' + file_path, auth=self.auth)
+            response = requests.delete(self.base_url + '/delete/' + file_path)
             return response.status_code
         except requests.exceptions.RequestException as e:
             print("Error: Failed to connect to remote server.", e)
@@ -101,16 +78,11 @@ class ClientInterface:
     def create_request(self):
 
         print("Entering in the cryptography interface: \n")
-        cryptography_tool()
         print("Exiting the cryptography interface: \n")
         data = read_json_file('encrypted.json')
         if data is not None:
             try:
-                if not self.is_authenticated():
-                    print("Authentication required.")
-                    return None
-
-                response = requests.post(self.base_url + '/create', json=data, auth=self.auth)
+                response = requests.post(self.base_url + '/create', json=data)
                 return response.status_code
             except requests.exceptions.RequestException as e:
                 print("Error: Failed to connect to remote server.", e)
@@ -129,9 +101,7 @@ class ClientInterface:
     def run_interface(self):
         while True:
 
-            self.register_user(self.username, self.password)
-
-            self.authenticate()
+            self.register_user(self.username)
 
             self.help_command()
 
@@ -174,8 +144,7 @@ class ClientInterface:
 if __name__ == "__main__":
     base_url = "http://192.168.1.254:5000/api"  # Replace with your actual base URL
     username = input("Enter your username: ")
-    password = input("Enter your password: ")
-    client = ClientInterface(base_url, username, password)
+    client = ClientInterface(base_url, username)
     client.run_interface()
 
    

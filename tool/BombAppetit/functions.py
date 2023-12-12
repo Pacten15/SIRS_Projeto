@@ -49,7 +49,7 @@ def create_key_pair(key_size, public_key_path, private_key_path):
     with open(private_key_path, 'wb') as private_key_file:
         private_key_file.write(key.export_key())
     
-    return key
+    return [key.publickey().export_key(), key.export_key()]
 
 def encrypt(raw_content, src_private_key, dst_public_key):
     ''' Encrypts content using generated AES key, AES key will be encrypted
