@@ -43,6 +43,14 @@ class ClientInterface:
         except requests.exceptions.RequestException as e:
             print("Error: Failed to connect to remote server.", e)
             return None
+        
+    def delete_user(self, username):
+        try:
+            response = requests.delete(self.base_url + '/users/' + username)
+            return response.status_code
+        except requests.exceptions.RequestException as e:
+            print("Error: Failed to connect to remote server.", e)
+            return None
 
 
     def read_remote_json_file(self, file_path):
@@ -96,7 +104,8 @@ class ClientInterface:
         print("2. Read remote JSON file")
         print("3. Update remote JSON file")
         print("4. Delete remote JSON file")
-        print("5. Exit")
+        print("5. Delete user")
+        print("6. Exit")
 
     def run_interface(self):
         while True:
@@ -137,6 +146,13 @@ class ClientInterface:
                 else:
                     print("Failed to delete remote JSON file")
             elif choice == "5":
+                status_code = self.delete_user(self.username)
+                if status_code is not None:
+                    print("Delete status code:", status_code)
+                    break
+                else:
+                    print("Failed to delete user")
+            elif choice == "6":
                 break
             else:
                 print("Invalid choice. Please try again.")
