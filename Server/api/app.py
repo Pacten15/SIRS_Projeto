@@ -81,7 +81,7 @@ def read_restaurant(restaurant_id):
         db.execute(SELECT_RESTAURANT, (restaurant_id,))
         get_data = db.fetchone()
 
-    if get_data is none:
+    if get_data is None:
         return { "message": f"Restaurant {restaurant_id} not found." }, 404
 
     return get_data[0], 200
@@ -405,3 +405,6 @@ def delete_review():
 
     return { "message": "Review not found" }, 404
 
+if __name__ == '__main__':
+    # Run the app on IP address 0.0.0.0 (all available interfaces) and port 5000
+    app.run(host='192.168.1.254', port=5000)
