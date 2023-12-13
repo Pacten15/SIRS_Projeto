@@ -1,10 +1,8 @@
 import json
 import requests
-import sys
-sys.path.append('../tool/BombAppetit')
 
-from functions import create_key_pair
-from functions import encrypt
+import BombAppetit as BA
+
 
 
 def read_json_file(file_path):
@@ -28,8 +26,8 @@ class ClientInterface:
 
         try:
             # Create key pair
-            keys = create_key_pair(2048, 'keys/' + username + '.pubkey', 'keys/' + username + '.privkey')
-
+            username_str = ''.join(self.username)
+            keys = BA.create_key_pair(2048, 'keys/' + username_str + '.pubkey', 'keys/' + username_str + '.privkey')
             public_key = keys[0]
 
             # Create user data dictionary
@@ -56,7 +54,7 @@ class ClientInterface:
     def read_remote_json_file(self, file_path):
         try:
 
-            response = requests.get(self.base_url + '/read/' + file_path)
+            response = requests.get(self.base_url + '/read_json/' + file_path)
             if response.status_code == 200:
                 data = response.json()
                 return data
@@ -69,7 +67,7 @@ class ClientInterface:
 
     def update_remote_json_file(self, file_path, data):
         try:
-            response = requests.put(self.base_url + '/update/' + file_path, json=data)
+            response = requests.put(self.base_url + '/update_json/' + file_path, json=data)
             return response.status_code
         except requests.exceptions.RequestException as e:
             print("Error: Failed to connect to remote server.", e)
@@ -77,7 +75,7 @@ class ClientInterface:
 
     def delete_remote_json_file(self, file_path):
         try:
-            response = requests.delete(self.base_url + '/delete/' + file_path)
+            response = requests.delete(self.base_url + '/delete_json/' + file_path)
             return response.status_code
         except requests.exceptions.RequestException as e:
             print("Error: Failed to connect to remote server.", e)
@@ -85,12 +83,14 @@ class ClientInterface:
 
     def create_request(self):
 
-        print("Entering in the cryptography interface: \n")
-        print("Exiting the cryptography interface: \n")
+        json_file_path = input("Enter the JSON file path: ")
+        username_str = ''.join(self.username)
+        BA.protect(json_file_path, 'keys/' + username_str + '.privkey', 'keys/' + username_str + '.pubkey', 'encrypted.json')
         data = read_json_file('encrypted.json')
+        data['UserName'] = username_str
         if data is not None:
             try:
-                response = requests.post(self.base_url + '/create', json=data)
+                response = requests.post(self.base_url + '/secure_document', json=data)
                 return response.status_code
             except requests.exceptions.RequestException as e:
                 print("Error: Failed to connect to remote server.", e)
@@ -117,8 +117,7 @@ class ClientInterface:
             choice = input("Enter your choice: ")
 
             if choice == "1":
-                file_path = input("Enter the file path: ")
-                status_code = self.create_request(file_path)
+                status_code = self.create_request()
                 if status_code is not None:
                     print("Request status code:", status_code)
                 else:

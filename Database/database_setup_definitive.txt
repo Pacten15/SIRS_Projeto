@@ -126,36 +126,22 @@ If the it isn´t the port 5433 verify in this file by doing this after only exec
 
 create a new user:
 
-CREATE USER luis WITH PASSWORD '123';
+CREATE USER sirs_dbadmin WITH PASSWORD 'sirs_dbpassword';
 
 create a database:
 
-CREATE DATABASE documents WITH OWNER luis ENCODING='UTF8' 
+CREATE DATABASE sirs_bombappetit WITH OWNER sirs_dbadmin ENCODING='UTF8' 
 
-Give Permissions to the user created
-
-ALTER USER luis WITH SUPERUSER;
-
-GRANT pg_read_all_data TO luis;
-
-GRANT pg_write_all_data TO luis;
-
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO luis;
-
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO luis;
-
-
-exit
 
 Verify if the user luis and documents was created properly:
 
-    psql -U luis -d documents -h 192.168.0.100  -p 5433 -W
+    psql -U luis -d documents -h 192.168.0.100  -p 5432 -W
 
 In VM2:
 
     Enter into the documents database of VM1:
 
-    psql -U luis -d documents -h 192.168.0.100  -p 5433 -W
+    psql -U luis -d documents -h 192.168.0.100  -p 5432 -W
 
 And Now the VM2 has acess to the VM1 database
 

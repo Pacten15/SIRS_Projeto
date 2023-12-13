@@ -47,6 +47,7 @@ def home():
     pub = private_rsa.public_key().export_key().decode('utf-8')
     return render_template("index.html", public_rsa=pub)
 
+
 # ----- RESTAURANTS -----
 
 @app.post("/api/restaurants")
