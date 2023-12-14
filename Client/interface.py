@@ -45,19 +45,20 @@ class ClientInterface:
             print("Error: Failed to connect to remote server.", e)
             return None
         
-    def delete_user(self, username):
+   
+        
+    def create_restaurant(self, restaurantInfoPath):
         try:
-            response = requests.delete(self.base_url + '/users/' + username)
+            data = read_json_file(restaurantInfoPath)
+            response = requests.post(self.base_url + '/restaurant', json=data)
             return response.status_code
         except requests.exceptions.RequestException as e:
             print("Error: Failed to connect to remote server.", e)
             return None
-
-
-    def read_remote_json_file(self, file_path):
+        
+    def read_all_restaurants(self):
         try:
-
-            response = requests.get(self.base_url + '/read_json/' + file_path)
+            response = requests.get(self.base_url + '/restaurant')
             if response.status_code == 200:
                 data = response.json()
                 return data
@@ -67,47 +68,72 @@ class ClientInterface:
         except requests.exceptions.RequestException as e:
             print("Error: Failed to connect to remote server.", e)
             return None
-
-    def update_remote_json_file(self, file_path, data):
+    
+    def delete_restaurant(self, restaurantInfoId):
         try:
-            response = requests.put(self.base_url + '/update_json/' + file_path, json=data)
+            response = requests.delete(self.base_url + '/restaurant/' + restaurantInfoId)
             return response.status_code
         except requests.exceptions.RequestException as e:
             print("Error: Failed to connect to remote server.", e)
             return None
-
-    def delete_remote_json_file(self, file_path):
+    
+    def update_restaurant(self, restaurantInfoId, restaurantInfoPath):
         try:
-            response = requests.delete(self.base_url + '/delete_json/' + file_path)
+            response = requests.put(self.base_url + '/restaurant/' + restaurantInfoId, json=restaurantInfoPath)
             return response.status_code
         except requests.exceptions.RequestException as e:
             print("Error: Failed to connect to remote server.", e)
             return None
-
-    def create_request(self):
-
-        json_file_path = input("Enter the JSON file path: ")
-        username_str = ''.join(self.username)
-        BA.protect(json_file_path, 'keys/' + username_str + '.privkey', 'keys/' + username_str + '.pubkey', 'encrypted.json')
-        data = read_json_file('encrypted.json')
-        data['UserName'] = username_str
-        if data is not None:
-            try:
-                response = requests.post(self.base_url + '/secure_document', json=data)
-                return response.status_code
-            except requests.exceptions.RequestException as e:
-                print("Error: Failed to connect to remote server.", e)
-                return None
-        else:
+    
+    def update_user(self, username, userNewName):
+        try:
+            newUsername = {"username": userNewName}
+            response = requests.put(self.base_url + '/users/' + username, json=newUsername)
+            return response.status_code
+        except requests.exceptions.RequestException as e:
+            print("Error: Failed to connect to remote server.", e)
             return None
         
-    def create_restaurant(self, restaurantInfoPath):
+    def delete_user(self, username):
+       try:
+           response = requests.delete(self.base_url + '/users/' + username)
+           return response.status_code
+       except requests.exceptions.RequestException as e:
+           print("Error: Failed to connect to remote server.", e)
+           return None
+       
+    def create_voucher(self, username, restaurantId, voucherCode, description):
         try:
-            response = requests.post(self.base_url + '/restaurant', json=restaurantInfoPath)
+
+
+            data = {"user_name": username,   restaurantId: restaurantId, "voucher_code": voucherCode, "description": description}
+            response = requests.post(self.base_url + '/voucher', json=data)
             return response.status_code
         except requests.exceptions.RequestException as e:
             print("Error: Failed to connect to remote server.", e)
             return None
+        
+    def update_voucher(self, voucherId, voucherCode, description):
+        try:
+            data = {"voucher_code": voucherCode, "description": description}
+            response = requests.put(self.base_url + '/voucher/' + voucherId, json=data)
+            return response.status_code
+        except requests.exceptions.RequestException as e:
+            print("Error: Failed to connect to remote server.", e)
+            return None
+    
+    def delete_voucher(self, voucherId):
+        try:
+            response = requests.delete(self.base_url + '/voucher/' + voucherId)
+            return response.status_code
+        except requests.exceptions.RequestException as e:
+            print("Error: Failed to connect to remote server.", e)
+            return None
+    
+
+    
+    
+
         
     def login(self):
         try:
@@ -146,13 +172,147 @@ class ClientInterface:
         print ("8. delete voucher")
         print ("9. exit")
 
+    def clientMenu(self):
+
+        while(True):
+            self.help_command_client
+
+            choice = input("Enter your choice: ")
+
+            if choice == "1":
+                username = input("Enter the username: ")
+                status_code = self.register_user(username)
+                if status_code is not None:
+                    print("Request status code:", status_code)
+                else:
+                    print("Failed to create request")
+            if choice == "2":
+                username = input("Enter the username: ")
+                status_code = self.delete_user(username)
+                if status_code is not None:
+                    print("Request status code:", status_code)
+                else:
+                    print("Failed to create request")
+            if choice == "3":
+                username = input("Enter the username: ")
+                status_code = self.read_voucher(username)
+                if status_code is not None:
+                    print("Request status code:", status_code)
+                else:
+                    print("Failed to create request")
+            if choice == "4":
+                username = input("Enter the username: ")
+                restaurantId = input("Enter the restaurant id: ")
+                voucherCode = input("Enter the voucher code: ")
+                description = input("Enter the description: ")
+                status_code = self.create_review(username, restaurantId, voucherCode, description)
+                if status_code is not None:
+                    print("Request status code:", status_code)
+                else:
+                    print("Failed to create request")
+            if choice == "5":
+                username = input("Enter the username: ")
+                status_code = self.read_review(username)
+                if status_code is not None:
+                    print("Request status code:", status_code)
+                else:
+                    print("Failed to create request")
+            if choice == "6":
+                username = input("Enter the username: ")
+                restaurantId = input("Enter the restaurant id: ")
+                voucherCode = input("Enter the voucher code: ")
+                description = input("Enter the description: ")
+                status_code = self.update_review(username, restaurantId, voucherCode, description)
+                if status_code is not None:
+                    print("Request status code:", status_code)
+                else:
+                    print("Failed to create request")
+            if choice == "7":
+                username = input("Enter the username: ")
+                status_code = self.delete_review(username)
+                if status_code is not None:
+                    print("Request status code:", status_code)
+                else:
+                    print("Failed to create request")
+            else:
+                print("Invalid choice. Please try again.")
+
     def adminMenu(self):
-        self.help_command_admin
+        
 
-        choice = input("Enter your choice: ")
+        while(True):
+            self.help_command_admin
 
-        if choice == "1":
-            print("jesus")
+            choice = input("Enter your choice: ")
+
+            if choice == "1":
+                restaurantInfoPath = input("Enter the restaurant info path: ")
+                status_code = self.create_restaurant(restaurantInfoPath)
+                if status_code is not None:
+                    print("Request status code:", status_code)
+                else:
+                    print("Failed to create request")
+            if choice == "2":
+                restaurantInfoId = input("Enter the restaurant info id: ")
+                status_code = self.delete_restaurant(restaurantInfoId)
+                if status_code is not None:
+                    print("Request status code:", status_code)
+                else:
+                    print("Failed to create request")
+            if choice == "3":
+                restaurantInfoId = input("Enter the restaurant info id: ")
+                restaurantInfoPath = input("Enter the restaurant info path: ")
+                status_code = self.update_restaurant(restaurantInfoId, restaurantInfoPath)
+                if status_code is not None:
+                    print("Request status code:", status_code)
+                else:
+                    print("Failed to create request")
+            if choice == "4":
+                username = input("Enter the username: ")
+                userNewName = input("Enter the new username: ")
+                status_code = self.update_user(username, userNewName)
+                if status_code is not None:
+                    print("Request status code:", status_code)
+                else:
+                    print("Failed to create request")
+            if choice == "5":
+                username = input("Enter the username: ")
+                status_code = self.delete_user(username)
+                if status_code is not None:
+                    print("Request status code:", status_code)
+                else:
+                    print("Failed to create request")
+            if choice == "6": 
+                username = input("Enter the username: ")
+                restaurantId = input("Enter the restaurant id: ")
+                voucherCode = input("Enter the voucher code: ")
+                description = input("Enter the description: ")
+                status_code = self.create_voucher(username, restaurantId, voucherCode, description)
+                if status_code is not None:
+                    print("Request status code:", status_code)
+                else:
+                    print("Failed to create request")
+            if choice == "7":
+                voucherId = input("Enter the voucher id: ")
+                voucherCode = input("Enter the voucher code: ")
+                description = input("Enter the description: ")
+                status_code = self.update_voucher(voucherId, voucherCode, description)
+                if status_code is not None:
+                    print("Request status code:", status_code)
+                else:
+                    print("Failed to create request")
+            if choice == "8":
+                voucherId = input("Enter the voucher id: ")
+                status_code = self.delete_voucher(voucherId)
+                if status_code is not None:
+                    print("Request status code:", status_code)
+                else:
+                    print("Failed to create request")
+            if choice == "9":
+                break
+            else:
+                print("Invalid choice. Please try again.")
+
 
 
     def clientMenu(self):
