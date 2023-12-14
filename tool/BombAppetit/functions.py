@@ -284,6 +284,132 @@ def decrypt_json_section(encrypted_document, src_public_key, dst_private_key, no
     decrypted_Documents_bytes = json.dumps(decrypted_Documents, indent=2, ensure_ascii=False).encode('utf-8')
 
     return decrypted_Documents_bytes
-    
+
+
+def encrypt_json(json_object, src_private_key, dst_public_key, sections_to_encrypt=None):
+    ''' Encrypts content using generated AES key, AES key will be encrypted
+        with dst_public_key for confidentiality, the contents will be hashed,
+        for integrity, and signed using src_private_key, for autheticity.
         
+        sections_to_encrypt is a list of strings, each string is a path to a
+        section of the JSON that should be encrypted. If sections_to_encrypt is
+        None, the entire JSON will be encrypted. If sections_to_encrypt is an
+        empty list, nothing will be encrypted.'''
+    # Generate AES key and encrypt contents
+    gen_key = get_random_bytes(32) # 32 for AES-256
+    gen_cipher = AES.new(gen_key, AES.MODE_CBC)
+
+    json_mutable = json_object.copy()
+
+    if sections_to_encrypt is None:
+        # -- encrypt entire json --
+        json_bytes = json.dumps(json_mutable).encode('utf-8')
+        ciphertext = gen_cipher.encrypt(pad(json_bytes, AES.block_size))
+        encrypted_content = b64encode(ciphertext).decode('utf-8')
+
+        # add metadata and redo b64
+        json_mutable = { 'json': encrypted_content, 'timestamp': datetime.utcnow().timestamp(),
+                         'encrypted_sections': [], 'is_encrypted': True }
+        json_bytes = json.dumps(json_mutable).encode('utf-8')
+        encrypted_content = b64encode(json_bytes).decode('utf-8')
+    elif len(sections_to_encrypt):
+        # -- encrypt only the specified sections --
+        for section in sections_to_encrypt:
+            # remove the section from the json
+            content = json_mutable.pop(section, None)
+            if content is None:
+                print(f"WARNING: section '{section}' not found in JSON")
+                continue
+
+            # encrypt the section
+            json_bytes = json.dumps(content).encode('utf-8')
+            ciphertext = gen_cipher.encrypt(pad(json_bytes, AES.block_size))
+            encrypted_content = b64encode(ciphertext).decode('utf-8')
+
+            # replace the section in the json
+            json_mutable[section] = encrypted_content
+        # b64 the json
+        json_mutable = { 'json': json_mutable, 'timestamp': datetime.utcnow().timestamp(),
+                         'encrypted_sections': sections_to_encrypt, 'is_encrypted': False }
+        json_bytes = json.dumps(json_mutable).encode('utf-8')
+        encrypted_content = b64encode(json_bytes).decode('utf-8')
+    else:
+        # -- encrypt nothing --
+        json_mutable = { 'json': json_mutable, 'timestamp': datetime.utcnow().timestamp(),
+                         'encrypted_sections': sections_to_encrypt, 'is_encrypted': False }
+        json_bytes = json.dumps(json_mutable).encode('utf-8')
+        encrypted_content = b64encode(json_bytes).decode('utf-8')
+
+    # Encrypt AES key, IV, and timestamp with public RSA key
+    rsa_cipher = PKCS1_v1_5.new(dst_public_key)
+    ciphertext = rsa_cipher.encrypt(gen_key + gen_cipher.iv) # this concatenates the bytes
+    encrypted_key = b64encode(ciphertext).decode('utf-8')
+
+    # Create contents digest and sign
+    hashed = SHA256.new(encrypted_content.encode('utf-8'))
+    signer = pkcs1_15.new(src_private_key)
+    ciphertext = signer.sign(hashed)
+    encrypted_hash = b64encode(ciphertext).decode('utf-8')
+
+    return { 'encrypted_content': encrypted_content,
+             'encrypted_key':     encrypted_key,
+             'encrypted_hash':    encrypted_hash, }
+
+def decrypt_json(encrypted_document, src_public_key, dst_private_key, seen_ivs=None):
+    ''' Decrypts encrypted_document using AES, AES key is found by decrypting
+        with dst_private_key, the signature is checked using src_public_key,
+        and the decrypted contents are returned directly.'''
+    encrypted_content, encrypted_key, encrypted_hash = encrypted_document.values()
+    if seen_ivs is None:
+        seen_ivs = set()
+    
+    # Decrypt AES key, IV, and timestamp with private RSA key
+    sentinel = get_random_bytes(32 + 16 + 16)
+    rsa_cipher = PKCS1_v1_5.new(dst_private_key)
+    ciphertext = b64decode(encrypted_key.encode())
+    gen_key_iv_timestamp = rsa_cipher.decrypt(ciphertext, sentinel, expected_pt_len=32 + 16)
+    assert gen_key_iv_timestamp != sentinel
+    gen_key = gen_key_iv_timestamp[:32]
+    gen_iv  = gen_key_iv_timestamp[32:32+16]
+
+    gen_cipher = AES.new(gen_key, AES.MODE_CBC, gen_iv)
+
+    root_json = json.loads(b64decode(encrypted_content.encode('utf-8')))
+    if root_json['is_encrypted']:
+        # -- decrypt entire json --
+        decoded_content = b64decode(root_json['json'].encode('utf-8'))
+        raw_content = unpad(gen_cipher.decrypt(decoded_content), AES.block_size)
+        json_mutable = json.loads(raw_content)
+    else:
+        # -- decrypt only the specified sections --
+        json_mutable = root_json['json']
+        for section in root_json['encrypted_sections']:
+            # remove the section from the json
+            decoded_content = json_mutable.pop(section, None)
+            if decoded_content is None:
+                print(f"WARNING: section '{section}' not found in JSON")
+                continue
+            decoded_content = b64decode(decoded_content.encode('utf-8'))
+
+            # decrypt the section
+            raw_content = unpad(gen_cipher.decrypt(decoded_content), AES.block_size)
+
+            # replace the section in the json
+            json_mutable[section] = json.loads(raw_content)
+
+    # Test timestamp for freshness
+    now = datetime.utcnow().timestamp() - 5 # 5 second leeway
+    if root_json['timestamp'] < now:
+        print("WARNING: freshness check failed, timestamp is too old")
+    
+    if gen_iv in seen_ivs:
+        print("WARNING: freshness check failed, IV has been seen before")
+
+    # Test raw_content with the signed digest
+    hashed = SHA256.new(encrypted_content.encode('utf-8'))
+    signer = pkcs1_15.new(src_public_key)
+    signature = b64decode(encrypted_hash.encode())
+    signer.verify(hashed, signature)
+
+    return json_mutable
         
