@@ -288,7 +288,8 @@ def decrypt_json_section(encrypted_document, src_public_key, dst_private_key, no
     return decrypted_Documents_bytes
 
 
-# --- New functions for the new structure ---
+# --- New functions ---
+
 
 # -- output of encrypt_json() and input of decrypt_json() --
 #
