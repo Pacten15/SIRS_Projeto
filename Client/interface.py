@@ -21,10 +21,11 @@ def read_json_file(file_path):
             return None
     
 class ClientInterface:
-    def __init__(self, base_url , username, certificate_path, key_path):
+    def __init__(self, base_url, username, certificate_client_path, certificate_server_path, key_path):
         self.base_url = base_url
         self.username = username
-        self.certificate_path = certificate_path
+        self.certificate_client_path = certificate_client_path
+        self.certificate_server_path = certificate_server_path
         self.key_path = key_path
            
 
@@ -42,7 +43,7 @@ class ClientInterface:
                 'public_key': public_key
             }
 
-            response = requests.post(self.base_url + '/users', json=user_data, cert=(self.certificate_path, self.key_path), verify=False)
+            response = requests.post(self.base_url + '/users', json=user_data, cert=(self.certificate_client_path, self.key_path), verify=self.certificate_server_path)
             return response.status_code
         except requests.exceptions.RequestException as e:
             print("Error: Failed to connect to remote server.", e)
@@ -347,10 +348,11 @@ class ClientInterface:
 if __name__ == "__main__":
     base_url = "https://192.168.2.0:5000/api"  # Replace with your actual base URL
     # Specify the path to your certificate file
-    certificate_path = "certificate/cert.pem"
-    key_path = "certificate/key.pem"
+    certificate_client_path = "certificate/cert_client.pem"
+    certificate_server_path = "certificate/cert_server.pem"
+    key_path = "certificate/key_client.pem"
     username = input("Enter your username: ")
-    client = ClientInterface(base_url, username,certificate_path, key_path)
+    client = ClientInterface(base_url, username,certificate_client_path, certificate_server_path, key_path)
     client.loginMenu()
 
    
