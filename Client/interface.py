@@ -21,9 +21,12 @@ def read_json_file(file_path):
             return None
     
 class ClientInterface:
-    def __init__(self, base_url , username):
+    def __init__(self, base_url , username, certificate_path, key_path):
         self.base_url = base_url
         self.username = username
+        self.certificate_path = certificate_path
+        self.key_path = key_path
+           
 
     def register_user(self, username):
 
@@ -39,7 +42,7 @@ class ClientInterface:
                 'public_key': public_key
             }
 
-            response = requests.post(self.base_url + '/users', json=user_data)
+            response = requests.post(self.base_url + '/users', json=user_data, cert=(self.certificate_path, self.key_path), verify=False)
             return response.status_code
         except requests.exceptions.RequestException as e:
             print("Error: Failed to connect to remote server.", e)
@@ -339,56 +342,15 @@ class ClientInterface:
             print("Invalid choice. Please try again.")
             self.loginMenu()
 
-    def run_client_interface(self):
-        while True:
-            self.help_command()
-
-            choice = input("Enter your choice: ")
-
-            if choice == "1":
-                status_code = self.create_request()
-                if status_code is not None:
-                    print("Request status code:", status_code)
-                else:
-                    print("Failed to create request")
-            elif choice == "2":
-                file_path = input("Enter the file path: ")
-                data = self.read_remote_json_file(file_path)
-                if data is not None:
-                    print("Remote JSON file data:", data)
-                else:
-                    print("Failed to read remote JSON file")
-            elif choice == "3":
-                file_path = input("Enter the file path: ")
-                data = input("Enter the updated data: ")
-                status_code = self.update_remote_json_file(file_path, data)
-                if status_code is not None:
-                    print("Update status code:", status_code)
-                else:
-                    print("Failed to update remote JSON file")
-            elif choice == "4":
-                file_path = input("Enter the file path: ")
-                status_code = self.delete_remote_json_file(file_path)
-                if status_code is not None:
-                    print("Delete status code:", status_code)
-                else:
-                    print("Failed to delete remote JSON file")
-            elif choice == "5":
-                status_code = self.delete_user(self.username)
-                if status_code is not None:
-                    print("Delete status code:", status_code)
-                    break
-                else:
-                    print("Failed to delete user")
-            elif choice == "6":
-                break
-            else:
-                print("Invalid choice. Please try again.")
+   
 
 if __name__ == "__main__":
-    base_url = "https://192.168.1.254:5000/api"  # Replace with your actual base URL
+    base_url = "https://192.168.2.0:5000/api"  # Replace with your actual base URL
+    # Specify the path to your certificate file
+    certificate_path = "certificate/cert.pem"
+    key_path = "certificate/key.pem"
     username = input("Enter your username: ")
-    client = ClientInterface(base_url, username)
-    client.run_interface()
+    client = ClientInterface(base_url, username,certificate_path, key_path)
+    client.loginMenu()
 
    
