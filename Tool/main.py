@@ -70,6 +70,9 @@ def unprotect(infile_path, src_key_path, dst_key_path, outfile_path):
         exit(1)
 
     outfile, nonce = BA.decrypt_json(infile, src_pub_key, dst_priv_key, seen_nonces=seen_nonces)
+    if outfile is None:
+        print(f"ERROR: document is invalid, reason: {nonce}", file=sys.stderr)
+        exit(1)
 
     seen_nonces.add(nonce)
     set_nonces(seen_nonces)
@@ -98,7 +101,10 @@ def check(infile_path, src_key_path, dst_key_path):
         exit(1)
 
     try:
-        _, nonce = BA.decrypt_json(infile, src_pub_key, dst_priv_key, seen_nonces=seen_nonces)
+        outfile, nonce = BA.decrypt_json(infile, src_pub_key, dst_priv_key, seen_nonces=seen_nonces)
+        if outfile is None:
+            print(f"ERROR: document is invalid, reason: {nonce}", file=sys.stderr)
+            exit(1)
         print("OK: document is valid")
         seen_nonces.add(nonce)
         set_nonces(seen_nonces)

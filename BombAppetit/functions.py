@@ -290,18 +290,18 @@ def decrypt_json_section(encrypted_document, src_public_key, dst_private_key, no
 
 # --- New functions ---
 
-
 # -- output of encrypt_json() and input of decrypt_json() --
 #
 # encrypted_document = {
-#     'content':       str( {    
-#                          'json': json_object,
-#                          'timestamp': seconds in float with microsecond precision,
-#                          'encrypted_sections': list,
-#                          'fully_encrypted': bool
-#                      } ),
+#     'content':       str of {    
+#                          'json':                  json_object,
+#                          'timestamp':             seconds in float with microsecond precision,
+#                          'nonce':                 str,
+#                          'encrypted_sections':    list,
+#                          'fully_encrypted':       bool
+#                      },
 #     'encrypted_key': base64(rsa_encrypt(AES_key + AES_IV)),
-#     'signature':     base64(rsa_sign(sha256(encrypted_content))),
+#     'signature':     base64(rsa_sign(sha256(content))),
 # }
 #
 
@@ -372,7 +372,7 @@ def encrypt_json(json_object, src_private_key, dst_public_key, sections_to_encry
                  'encrypted_key': encrypted_key,
                  'signature':     encrypted_hash, }
 
-def decrypt_json(encrypted_document, src_public_key, dst_private_key, seen_nonces=None):
+def decrypt_json(encrypted_document, src_public_key, dst_private_key, seen_nonces=None, freshness_check=True):
     ''' Decrypts encrypted_document using AES, AES key is found by decrypting
         with dst_private_key, the signature is checked using src_public_key,
         and the decrypted contents are returned directly.'''
@@ -416,13 +416,13 @@ def decrypt_json(encrypted_document, src_public_key, dst_private_key, seen_nonce
             # replace the section in the json
             json_mutable[section] = json.loads(raw_content)
 
-    # Test timestamp for freshness
-    now = datetime.utcnow().timestamp() - 5 # 5 second leeway
-    if root_json['timestamp'] < now:
-        print("WARNING: freshness check failed, timestamp is too old")
-    
-    if root_json['nonce'] in seen_nonces:
-        print("WARNING: freshness check failed, nonce has been seen before")
+    if freshness_check:
+        if root_json['nonce'] in seen_nonces:
+            return None, "freshness check failed, nonce has been seen before"
+
+        now = datetime.utcnow().timestamp() - 5 # 5 second leeway
+        if root_json['timestamp'] < now:
+            return None, "freshness check failed, timestamp is too old"
 
     if src_public_key is not None:
         # This will raise an exception if the signature is invalid
