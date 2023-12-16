@@ -153,8 +153,25 @@ def api_restaurant():
 
         if result is None:
             return send_json_response({"error": "Restaurant not found"}, 404)
+        
+        restaurant = json.loads(result[0])
+        
+        # get vouchers for restaurant and add to response
+        with database, database.cursor() as db:
+            db.execute("SELECT code, description FROM ba_vouchers WHERE restaurant_id = (%s) AND user_name = (%s);",
+                       (message['id'], user_name))
+            vouchers = db.fetchall()
+        
+        restaurant['mealVouchers'] = [{"code": code, "description": description} for code, description in vouchers]
 
-        return send_json_response({"data": json.loads(result[0])}, 200)
+        # get reviews for restaurant and add to response
+        with database, database.cursor() as db:
+            db.execute("SELECT review FROM ba_reviews WHERE restaurant_id = (%s);", (message['id'],))
+            reviews = db.fetchall()
+        
+        restaurant['reviews'] = [json.loads(review) for review in reviews]
+
+        return send_json_response({"restaurantInfo": json.loads(result[0])}, 200)
 
     # ----- UPDATE -----
 
