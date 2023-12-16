@@ -37,23 +37,23 @@ def protect(infile_path, src_key_path, dst_key_path, outfile_path):
     with open(outfile_path, 'w') as f:
         json.dump(outfile, f)
 
-def get_ivs():
+def get_nonces():
     try:
-        with open('seen_ivs.json', 'r') as f:
-            seen_ivs = set( bytes(i) for i in json.load(f) )
+        with open('seen_nonces.json', 'r') as f:
+            seen_nonces = set( json.load(f) )
     except FileNotFoundError:
-        seen_ivs = set()
-    return seen_ivs
+        seen_nonces = set()
+    return seen_nonces
 
-def set_ivs(seen_ivs):
-    with open('seen_ivs.json', 'w') as f:
-        json.dump(list(map(list, seen_ivs)), f)
+def set_nonces(seen_nonces):
+    with open('seen_nonces.json', 'w') as f:
+        json.dump(list(seen_nonces), f)
 
 def unprotect(infile_path, src_key_path, dst_key_path, outfile_path):
     with open(infile_path, 'r') as f:
         infile = json.load(f)
 
-    seen_ivs = get_ivs()
+    seen_nonces = get_nonces()
 
     if 'content' not in infile or 'signature' not in infile:
         print("ERROR: input file is not a valid encrypted document", file=sys.stderr)
@@ -69,10 +69,10 @@ def unprotect(infile_path, src_key_path, dst_key_path, outfile_path):
         print("ERROR: destination key is not a private key", file=sys.stderr)
         exit(1)
 
-    outfile, iv = BA.decrypt_json(infile, src_pub_key, dst_priv_key, seen_ivs=seen_ivs)
+    outfile, nonce = BA.decrypt_json(infile, src_pub_key, dst_priv_key, seen_nonces=seen_nonces)
 
-    seen_ivs.add(iv)
-    set_ivs(seen_ivs)
+    seen_nonces.add(nonce)
+    set_nonces(seen_nonces)
 
     with open(outfile_path, 'w') as f:
         json.dump(outfile, f, indent=4)
@@ -81,7 +81,7 @@ def check(infile_path, src_key_path, dst_key_path):
     with open(infile_path, 'r') as f:
         infile = json.load(f)
 
-    seen_ivs = get_ivs()
+    seen_nonces = get_nonces()
 
     if 'content' not in infile or 'signature' not in infile:
         print("ERROR: input file is not a valid encrypted document", file=sys.stderr)
@@ -98,10 +98,10 @@ def check(infile_path, src_key_path, dst_key_path):
         exit(1)
 
     try:
-        _, iv = BA.decrypt_json(infile, src_pub_key, dst_priv_key, seen_ivs=seen_ivs)
+        _, nonce = BA.decrypt_json(infile, src_pub_key, dst_priv_key, seen_nonces=seen_nonces)
         print("OK: document is valid")
-        seen_ivs.add(iv)
-        set_ivs(seen_ivs)
+        seen_nonces.add(nonce)
+        set_nonces(seen_nonces)
     except Exception as e:
         print("ERROR: document is invalid", file=sys.stderr)
         exit(1)

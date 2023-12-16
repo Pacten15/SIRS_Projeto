@@ -308,24 +308,23 @@ def decrypt_json_section(encrypted_document, src_public_key, dst_private_key, no
 def encrypt_json(json_object, src_private_key, dst_public_key, sections_to_encrypt=None):
     ''' Encrypts content using generated AES key, AES key will be encrypted
         with dst_public_key for confidentiality, the contents will be hashed,
-        for integrity, and signed using src_private_key, for autheticity.
+        for integrity, and signed using src_private_key, for authenticity.
         
-        sections_to_encrypt is a list of strings, each string is a path to a
-        section of the JSON that should be encrypted. If sections_to_encrypt is
-        None, the entire JSON will be encrypted. If sections_to_encrypt is an
-        empty list, nothing will be encrypted.'''
+        sections_to_encrypt is a list of strings, each string is a key name of
+        the JSON that should be encrypted. If sections_to_encrypt is None,
+        the entire JSON will be encrypted, unless dst_public_key is None.'''
     # Generate AES key and encrypt contents
     gen_key = get_random_bytes(32) # 32 for AES-256
     gen_cipher = AES.new(gen_key, AES.MODE_CBC)
 
     json_mutable = json_object.copy()
 
-    if sections_to_encrypt is None:
+    if sections_to_encrypt is None and dst_public_key is not None:
         # -- encrypt entire json --
         json_bytes = json.dumps(json_mutable).encode('utf-8')
         ciphertext = gen_cipher.encrypt(pad(json_bytes, AES.block_size))
         json_mutable = b64encode(ciphertext).decode('utf-8')
-    else:
+    elif sections_to_encrypt is not None and len(sections_to_encrypt):
         # -- encrypt only the specified sections --
         for section in sections_to_encrypt:
             # remove the section from the json
@@ -341,18 +340,23 @@ def encrypt_json(json_object, src_private_key, dst_public_key, sections_to_encry
 
             # replace the section in the json
             json_mutable[section] = encrypted_content
+    else:
+        # -- do not encrypt --
+        json_mutable = json.dumps(json_mutable)
 
     json_bytes = json.dumps({
         'json': json_mutable,
         'timestamp': datetime.utcnow().timestamp(),
-        'encrypted_sections': sections_to_encrypt,
+        'nonce': get_random_bytes(16).hex(),
+        'encrypted_sections': sections_to_encrypt if sections_to_encrypt is not None else [],
         'fully_encrypted': sections_to_encrypt is None,
     })
 
-    # Encrypt AES key and IV with public RSA key
-    rsa_cipher = PKCS1_v1_5.new(dst_public_key)
-    ciphertext = rsa_cipher.encrypt(gen_key + gen_cipher.iv) # this concatenates the bytes
-    encrypted_key = b64encode(ciphertext).decode('utf-8')
+    if dst_public_key is not None:
+        # Encrypt AES key and IV with public RSA key
+        rsa_cipher = PKCS1_v1_5.new(dst_public_key)
+        ciphertext = rsa_cipher.encrypt(gen_key + gen_cipher.iv) # this concatenates the bytes
+        encrypted_key = b64encode(ciphertext).decode('utf-8')
 
     # Create contents digest and sign
     hashed = SHA256.new(json_bytes.encode('utf-8'))
@@ -360,29 +364,34 @@ def encrypt_json(json_object, src_private_key, dst_public_key, sections_to_encry
     ciphertext = signer.sign(hashed)
     encrypted_hash = b64encode(ciphertext).decode('utf-8')
 
-    return { 'content':       json_bytes,
-             'encrypted_key': encrypted_key,
-             'signature':     encrypted_hash, }
+    if dst_public_key is None:
+        return { 'content':       json_bytes,
+                 'signature':     encrypted_hash, }
 
-def decrypt_json(encrypted_document, src_public_key, dst_private_key, seen_ivs=None):
+    return     { 'content':       json_bytes,
+                 'encrypted_key': encrypted_key,
+                 'signature':     encrypted_hash, }
+
+def decrypt_json(encrypted_document, src_public_key, dst_private_key, seen_nonces=None):
     ''' Decrypts encrypted_document using AES, AES key is found by decrypting
         with dst_private_key, the signature is checked using src_public_key,
         and the decrypted contents are returned directly.'''
     content       = encrypted_document.get('content')
     encrypted_key = encrypted_document.get('encrypted_key')
-    if seen_ivs is None:
-        seen_ivs = set()
+    if seen_nonces is None:
+        seen_nonces = set()
 
-    # Decrypt AES key and IV with private RSA key
-    sentinel = get_random_bytes(32 + 16)
-    rsa_cipher = PKCS1_v1_5.new(dst_private_key)
-    ciphertext = b64decode(encrypted_key.encode())
-    gen_key_iv = rsa_cipher.decrypt(ciphertext, sentinel, expected_pt_len=32 + 16)
-    assert gen_key_iv != sentinel
+    if encrypted_key is not None:
+        # Decrypt AES key and IV with private RSA key
+        sentinel = get_random_bytes(32 + 16)
+        rsa_cipher = PKCS1_v1_5.new(dst_private_key)
+        ciphertext = b64decode(encrypted_key.encode())
+        gen_key_iv = rsa_cipher.decrypt(ciphertext, sentinel, expected_pt_len=32 + 16)
+        assert gen_key_iv != sentinel
 
-    gen_key = gen_key_iv[:32]
-    gen_iv  = gen_key_iv[32:32+16]
-    gen_cipher = AES.new(gen_key, AES.MODE_CBC, gen_iv)
+        gen_key = gen_key_iv[:32]
+        gen_iv  = gen_key_iv[32:32+16]
+        gen_cipher = AES.new(gen_key, AES.MODE_CBC, gen_iv)
 
     root_json = json.loads(content)
     if root_json['fully_encrypted']:
@@ -412,13 +421,14 @@ def decrypt_json(encrypted_document, src_public_key, dst_private_key, seen_ivs=N
     if root_json['timestamp'] < now:
         print("WARNING: freshness check failed, timestamp is too old")
     
-    if gen_iv in seen_ivs:
-        print("WARNING: freshness check failed, IV has been seen before")
+    if root_json['nonce'] in seen_nonces:
+        print("WARNING: freshness check failed, nonce has been seen before")
 
-    # This will raise an exception if the signature is invalid
-    test_json_hash(encrypted_document, src_public_key)
+    if src_public_key is not None:
+        # This will raise an exception if the signature is invalid
+        test_json_hash(encrypted_document, src_public_key)
 
-    return json_mutable, gen_iv
+    return json_mutable, root_json['nonce']
 
 def test_json_hash(encrypted_document, src_public_key):
     ''' Tests the hash/signature of a JSON object. Ignores freshness.'''
