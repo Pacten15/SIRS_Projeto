@@ -171,7 +171,7 @@ def api_restaurant():
         
         restaurant['reviews'] = [json.loads(review) for review in reviews]
 
-        return send_json_response({"restaurantInfo": json.loads(result[0])}, 200)
+        return send_json_response({"restaurantInfo": json.loads(result[0])}, 200, user_name, sections_to_encrypt=['mealVouchers'])
 
     # ----- UPDATE -----
 
@@ -313,7 +313,7 @@ def api_vouchers():
             db.execute("SELECT code, description, restaurant_id FROM ba_vouchers WHERE user_name = (%s);", (user_name,))
             vouchers = db.fetchall()
 
-        return send_json_response({"vouchers": [{"code": code, "description": description, "restaurant_id": restaurant_id} for code, description, restaurant_id in vouchers]}, 200)
+        return send_json_response({"vouchers": [{"code": code, "description": description, "restaurant_id": restaurant_id} for code, description, restaurant_id in vouchers]}, 200, user_name, sections_to_encrypt=['vouchers'])
 
     # ----- UPDATE -----
 
