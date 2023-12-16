@@ -432,15 +432,11 @@ def test_json_hash(encrypted_document, src_public_key):
     signer.verify(hashed, signature)
 
 
-def create_keypair(key_size=2048, filename=None):
+def create_keypair(key_size=2048):
     ''' Generates a new RSA keypair and returns it as a tuple of public and
         private keys.'''
-    print(key_size)
     private_key = RSA.generate(key_size)
     public_key  = private_key.publickey()
-
-    if filename is not None:
-        save_keypair(filename, private_key)
 
     return private_key, public_key
 
@@ -458,7 +454,11 @@ def load_keypair(filename):
     except FileNotFoundError:
         return None, None
 
-def save_keypair(filename, private_key):
-    ''' Saves a keypair to a file.'''
+def save_key(filename, key):
+    ''' Saves a key to a file.'''
     with open(filename, 'w') as f:
-        f.write(private_key.export_key().decode('utf-8'))
+        f.write(key.export_key().decode('utf-8'))
+
+def str_to_key(key_str):
+    ''' Converts a string to a public key.'''
+    return RSA.import_key(key_str)

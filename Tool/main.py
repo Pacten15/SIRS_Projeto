@@ -6,13 +6,14 @@ try:
     import BombAppetit as BA
 except ImportError:
     print("Import failed. Install dependencies with: pip3 install -r requirements.txt")
+    sys.exit(1)
 
 def print_help():
     print("Usage:")
     print(f"    python3 {sys.argv[0]} (action) (infile) (src_key) (dst_key) (outfile)")
     print("\n  Actions:")
     print("    help      - Prints this message")
-    print("    generate  - Generates a new RSA private key, (outfile) only")
+    print("    generate  - Generates a new RSA private key, stores pair with input common name (outfile)")
     print("    protect   - Encrypts (infile), (src_key) is private, (dst_key) is public")
     print("    unprotect - Decrypts (infile), (src_key) is public,  (dst_key) is private")
     print("    check     - Tests (infile), same arguments as unprotect, no (outfile)")
@@ -36,9 +37,23 @@ def protect(infile_path, src_key_path, dst_key_path, outfile_path):
     with open(outfile_path, 'w') as f:
         json.dump(outfile, f)
 
+def get_ivs():
+    try:
+        with open('seen_ivs.json', 'r') as f:
+            seen_ivs = set( bytes(i) for i in json.load(f) )
+    except FileNotFoundError:
+        seen_ivs = set()
+    return seen_ivs
+
+def set_ivs(seen_ivs):
+    with open('seen_ivs.json', 'w') as f:
+        json.dump(list(map(list, seen_ivs)), f)
+
 def unprotect(infile_path, src_key_path, dst_key_path, outfile_path):
     with open(infile_path, 'r') as f:
         infile = json.load(f)
+
+    seen_ivs = get_ivs()
 
     if 'content' not in infile or 'signature' not in infile:
         print("ERROR: input file is not a valid encrypted document", file=sys.stderr)
@@ -54,7 +69,10 @@ def unprotect(infile_path, src_key_path, dst_key_path, outfile_path):
         print("ERROR: destination key is not a private key", file=sys.stderr)
         exit(1)
 
-    outfile, _ = BA.decrypt_json(infile, src_pub_key, dst_priv_key)
+    outfile, iv = BA.decrypt_json(infile, src_pub_key, dst_priv_key, seen_ivs=seen_ivs)
+
+    seen_ivs.add(iv)
+    set_ivs(seen_ivs)
 
     with open(outfile_path, 'w') as f:
         json.dump(outfile, f, indent=4)
@@ -62,6 +80,8 @@ def unprotect(infile_path, src_key_path, dst_key_path, outfile_path):
 def check(infile_path, src_key_path, dst_key_path):
     with open(infile_path, 'r') as f:
         infile = json.load(f)
+
+    seen_ivs = get_ivs()
 
     if 'content' not in infile or 'signature' not in infile:
         print("ERROR: input file is not a valid encrypted document", file=sys.stderr)
@@ -78,11 +98,13 @@ def check(infile_path, src_key_path, dst_key_path):
         exit(1)
 
     try:
-        BA.decrypt_json(infile, src_pub_key, dst_priv_key)
+        _, iv = BA.decrypt_json(infile, src_pub_key, dst_priv_key, seen_ivs=seen_ivs)
         print("OK: document is valid")
+        seen_ivs.add(iv)
+        set_ivs(seen_ivs)
     except Exception as e:
         print("ERROR: document is invalid", file=sys.stderr)
-        exit(1) 
+        exit(1)
 
 
 def main():
@@ -102,14 +124,16 @@ def main():
         print_help()
         exit(0)
     
-    if action == 'generate' and len(sys.argv) < 3: # name, action, outfile_path
+    if action == 'generate' and len(sys.argv) < 3: # name, action, privatekey_path, publickey_path
         print_help()
         print("\nERROR: missing arguments", file=sys.stderr)
         exit(1)
     
     if action == 'generate':
         _, _, outfile_path = sys.argv[:3]
-        BA.create_keypair(filename=outfile_path)
+        private_key, public_key = BA.create_keypair()
+        BA.save_key("private_" + outfile_path, private_key)
+        BA.save_key("public_" + outfile_path, public_key)
         exit(0)
 
     if (len(sys.argv) < 4 and action == 'check') or len(sys.argv) < 5: # name, action, input, src, dst
