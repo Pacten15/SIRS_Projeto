@@ -18,4 +18,6 @@ Create a RSA key pair for server  by:
         openssl x509 -req -days 365 -in csr.pem -signkey private_server_key.pem -out certificate_server.pem
 
 
-    
+create key and certificate thats is going to be used by all users
+
+openssl req -x509 -newkey rsa:4096 -nodes -out cert.pem -keyout key.pem -days 365

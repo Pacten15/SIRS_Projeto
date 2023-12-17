@@ -2,6 +2,9 @@ import json
 import requests
 import os 
 import sys
+import warnings
+from urllib3.exceptions import SubjectAltNameWarning
+warnings.filterwarnings('ignore', category=SubjectAltNameWarning)
 
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 import BombAppetit as BA
@@ -30,39 +33,31 @@ def https_post_requests(url, data, certificate_client_path, key_path, certificat
             return None
     
 class ClientInterface:
-    def __init__(self, base_url, username, certificate_client_path, certificate_server_path, key_path):
+    def __init__(self, base_url, username, certificate_server_path, certificate_client_path, key_path):
         self.base_url = base_url
-        self.username = username
+        self.username = ''.join(username)
         self.certificate_client_path = certificate_client_path
-        self.certificate_server_path = certificate_server_path
         self.key_path = key_path
+        self.certificate_server_path = certificate_server_path
+        
 
-    def register_user(self, username):
+    def register_user(self):
 
         # Create key pair
-        username_str = ''.join(self.username)
-        keys = BA.create_key_pair(2048, 'keys/' + username_str + '.pubkey', 'keys/' + username_str + '.privkey')
+        keys = BA.create_key_pair(2048, 'keys/' + self.username + '.pubkey', 'keys/' + self.username + '.privkey')
         public_key = keys[0]
         # Create user data dictionary
         user_data = {
-            'user_name': username_str,
+            'user_name': self.username,
             'public_key': public_key.decode(),
             'operation': 'create' 
         }
-        
-        # Generate certificate and new key pair for it 
-        BA.generate_certificate('certificate/' + username_str + '.pem', 'certificate/' + username_str + 'key.pem')
-
-        self.certificate_client_path = 'certificate/' + username_str + '.pem'
-        self.key_path = 'certificate/' + username_str + 'key.pem'
     
         private_key = BA.str_to_key(keys[1].decode())
         data = BA.encrypt_json(user_data, private_key, None)
         print(data)
         response = https_post_requests(self.base_url + '/users', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
         print(response)
-        if response.status_code == 201:
-            print("User created successfully.")
         
         
       
@@ -87,6 +82,10 @@ class ClientInterface:
         https_post_requests(self.base_url + '/restaurant', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
       
     def delete_user(self, username):
+       data = {
+           'username': username,
+           'operation': 'delete'
+       }
        https_post_requests(self.base_url + '/users/' + username, data, self.certificate_client_path, self.key_path, self.certificate_server_path)
        username_str = ''.join(self.username)
        os.remove('keys/' + username_str + '.pubkey')
@@ -129,6 +128,7 @@ class ClientInterface:
         print ("5. read Review")
         print ("6. update Review")
         print ("7. delete Review")
+        print ("8. exit")
     
     def help_command_admin(self):
         print("Available commands:")
@@ -198,6 +198,8 @@ class ClientInterface:
                     print("Request status code:", status_code)
                 else:
                     print("Failed to create request")
+            if choice == "8":
+                break
             else:
                 print("Invalid choice. Please try again.")
 
@@ -275,35 +277,47 @@ class ClientInterface:
                 break
             else:
                 print("Invalid choice. Please try again.")
+    
+    def registerMenu(self):
+        self.register_user()
+        if(self.username == "admin"):
+            self.adminMenu()
+        else:
+            self.clientMenu()
 
-
+    
     def loginMenu(self):
+        self.login()
+        if(self.username == "admin"):
+            self.adminMenu()
+        else:
+            self.clientMenu()
+
+    def InterfaceMenu(self):
         print("1. Login")
         print("2. Register")
-        print("3. Admin")
-        print("4. Exit")
+        print("3. Exit")
         choice = input("Enter your choice: ")
         if choice == "1":
             self.login()
-            self.clientMenu()
         elif choice == "2":
-            self.register_user(self.username)
-            self.clientMenu()
+            self.registerMenu()
         elif choice == "3":
-            self.adminMenu()
-        elif choice == "4":
             exit()
         else:
             print("Invalid choice. Please try again.")
-            self.loginMenu()
+            self.InterfaceMenu()
 
    
 
 if __name__ == "__main__":
     base_url = "https://192.168.2.0:5000/api"  # Replace with your actual base URL
     # Specify the path to your certificate file
+    certificate_server_path = "certificate/certificate_server.pem"
+    certificate_client_path = "certificate/cert.pem"
+    key_path = "certificate/key.pem"
     username = input("Enter your username: ")
-    client = ClientInterface(base_url, username)
-    client.loginMenu()
+    client = ClientInterface(base_url, username, certificate_server_path, certificate_client_path, key_path)
+    client.InterfaceMenu()
 
    
