@@ -217,7 +217,7 @@ def api_users():
     if message is None:
         return send_json_response({"error": user_name}, 400)
 
-    if 'operation' not in message or message['operation'] not in ('create', 'list', 'read', 'update', 'delete'):
+    if 'operation' not in message or message['operation'] not in ('create', 'list', 'read', 'update', 'delete','login'):
         return send_json_response({"error": "Invalid operation"}, 400)
 
     # ----- CREATE -----
@@ -256,6 +256,23 @@ def api_users():
             return send_json_response({"error": "User not found"}, 404)
 
         return send_json_response({"public_key": result[0]}, 200)
+
+    # ------ LOGIN -----
+    if message['operation'] == 'login':
+        if 'user_name' not in message or 'public_key' not in message:
+            return send_json_response({"error": "Missing user_name or public_key"}, 400)
+
+        with database, database.cursor() as db:
+            db.execute("SELECT public_key FROM ba_users WHERE name = (%s);", (message['user_name'],))
+            result = db.fetchone()
+
+        if result is None:
+            return send_json_response({"error": "User not found"}, 404)
+
+        if result[0] != message['public_key']:
+            return send_json_response({"error": "Invalid public key"}, 403)
+
+        return send_json_response({}, 200)
 
     # ----- UPDATE -----
 
