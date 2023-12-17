@@ -296,7 +296,7 @@ if __name__ == "__main__":
     base_url = "https://192.168.2.0:5000/api"  # Replace with your actual base URL
     # Specify the path to your certificate file
     certificate_client_path = "certificate/cert_client.pem"
-    certificate_server_path = "certificate/cert_server.pem"
+    certificate_server_path = "certificate/certificate_server.pem"
     key_path = "certificate/key_client.pem"
     username = input("Enter your username: ")
     client = ClientInterface(base_url, username,certificate_client_path, certificate_server_path, key_path)
