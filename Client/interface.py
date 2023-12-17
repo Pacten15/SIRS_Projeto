@@ -39,6 +39,8 @@ class ClientInterface:
         self.certificate_client_path = certificate_client_path
         self.key_path = key_path
         self.certificate_server_path = certificate_server_path
+        self.privkey = None
+        self.pubkey = None
         
 
     def register_user(self):
@@ -52,12 +54,46 @@ class ClientInterface:
             'public_key': public_key.decode(),
             'operation': 'create' 
         }
-    
-        private_key = BA.str_to_key(keys[1].decode())
+
+        #Load key pair
+        keys = BA.load_key_pair('keys/' + self.username + '.pubkey', 'keys/' + self.username + '.privkey')
+        self.pubkey = keys[0]
+        self.privkey = keys[1]
+
+        private_key = BA.str_to_key(self.privkey.decode())
         data = BA.encrypt_json(user_data, private_key, None)
-        print(data)
         response = https_post_requests(self.base_url + '/users', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
         print(response)
+    
+    def login_user(self):
+
+        keys = BA.load_key_pair('keys/' + self.username + '.pubkey', 'keys/' + self.username + '.privkey')
+        self.pubkey = keys[0]
+        self.privkey = keys[1]
+
+        login_data = {
+            'user_name': self.username,
+            'public_key': self.pubkey.decode(),
+            'operation': 'login'
+        }
+
+        private_key = BA.str_to_key(self.privkey.decode())
+        data = BA.encrypt_json(login_data, private_key, None)
+        response = https_post_requests(self.base_url + '/users', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
+        print(response)
+
+    def update_user(self, username, name):
+        https_post_requests(self.base_url + '/restaurant', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
+      
+    def delete_user(self, username):
+       data = {
+           'username': username,
+           'operation': 'delete'
+       }
+       https_post_requests(self.base_url + '/users/' + username, data, self.certificate_client_path, self.key_path, self.certificate_server_path)
+       username_str = ''.join(self.username)
+       os.remove('keys/' + username_str + '.pubkey')
+       os.remove('keys/' + username_str + '.privkey')
         
         
       
@@ -78,18 +114,7 @@ class ClientInterface:
         https_post_requests(self.base_url + '/restaurant', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
         
 
-    def update_user(self, username, name):
-        https_post_requests(self.base_url + '/restaurant', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
-      
-    def delete_user(self, username):
-       data = {
-           'username': username,
-           'operation': 'delete'
-       }
-       https_post_requests(self.base_url + '/users/' + username, data, self.certificate_client_path, self.key_path, self.certificate_server_path)
-       username_str = ''.join(self.username)
-       os.remove('keys/' + username_str + '.pubkey')
-       os.remove('keys/' + username_str + '.privkey')
+    
        
     def create_voucher(self, username, restaurantId, voucherCode, description):
     
@@ -104,21 +129,6 @@ class ClientInterface:
     def delete_voucher(self, voucherId):
         https_post_requests(self.base_url + '/voucher/' + voucherId, self.certificate_client_path, self.key_path, self.certificate_server_path)
        
-
-    def login(self):
-        try:
-            json_username = {"username": self.username}
-            response = requests.get(self.base_url + '/users/', json=json_username)
-            if response.status_code == 200:
-                print("Login successful.")
-                return response.status_code
-            else:
-                print("Failed to login. Status code:", response.status_code)
-                return None
-        except requests.exceptions.RequestException as e:
-            print("Error: Failed to connect to remote server.", e)
-            return None
-
     def help_command_client(self):
         print("Available commands:")
         print ("1. create user")
@@ -278,7 +288,7 @@ class ClientInterface:
             else:
                 print("Invalid choice. Please try again.")
     
-    def registerMenu(self):
+    def registerLogic(self):
         self.register_user()
         if(self.username == "admin"):
             self.adminMenu()
@@ -286,8 +296,8 @@ class ClientInterface:
             self.clientMenu()
 
     
-    def loginMenu(self):
-        self.login()
+    def loginLogic(self):
+        self.login_user()
         if(self.username == "admin"):
             self.adminMenu()
         else:
@@ -299,9 +309,9 @@ class ClientInterface:
         print("3. Exit")
         choice = input("Enter your choice: ")
         if choice == "1":
-            self.login()
+            self.loginLogic()
         elif choice == "2":
-            self.registerMenu()
+            self.registerLogic()
         elif choice == "3":
             exit()
         else:

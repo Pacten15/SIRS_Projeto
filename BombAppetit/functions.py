@@ -31,6 +31,18 @@ def create_key_pair(key_size, public_key_path, private_key_path):
     
     return [key.publickey().export_key(), key.export_key()]
 
+def load_key_pair(public_key_path, private_key_path):
+    ''' Loads a RSA key pair from the given public key and private key files. '''
+    # Load public key
+    with open(public_key_path, 'rb') as public_key_file:
+        public_key = RSA.import_key(public_key_file.read())
+
+    # Load private key
+    with open(private_key_path, 'rb') as private_key_file:
+        private_key = RSA.import_key(private_key_file.read())
+
+    return [public_key.export_key(), private_key.export_key()]
+
 
 # --- New functions ---
 
