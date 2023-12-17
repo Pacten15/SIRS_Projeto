@@ -135,13 +135,13 @@ CREATE DATABASE sirs_bombappetit WITH OWNER sirs_dbadmin ENCODING='UTF8'
 
 Verify if the user luis and documents was created properly:
 
-    psql -U luis -d documents -h 192.168.0.100  -p 5432 -W
+    psql -U sirs_dbadmin -d documents -h 192.168.0.100  -p 5432 -W
 
 In VM2:
 
     Enter into the documents database of VM1:
 
-    psql -U luis -d documents -h 192.168.0.100  -p 5432 -W
+    psql -U sirs_dbadmin -d documents -h 192.168.0.100  -p 5432 -W
 
 And Now the VM2 has acess to the VM1 database
 

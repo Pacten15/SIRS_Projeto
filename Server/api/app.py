@@ -22,7 +22,6 @@ tunnel.start()
 
 database = psycopg2.connect(host="192.168.0.100", database="sirs_bombappetit", user="sirs_dbadmin", password="sirs_dbpassword")
 
-private_rsa = RSA.generate(2048)
 CREATE_TABLES = ("CREATE TABLE IF NOT EXISTS ba_restaurants ( id SERIAL PRIMARY KEY, data JSONB NOT NULL );"
                  "CREATE TABLE IF NOT EXISTS ba_users ( name TEXT PRIMARY KEY, public_key TEXT );"
                  "CREATE TABLE IF NOT EXISTS ba_vouchers ("
@@ -408,4 +407,4 @@ def delete_review():
 
 if __name__ == '__main__':
     # Run the app on IP address 0.0.0.0 (all available interfaces) and port 5000
-    app.run(host='192.168.1.254', port=5000)
+    app.run(host='192.168.2.0', port=5000, ssl_context=('keys/cert_server.pem', 'keys/key_server.pem'))

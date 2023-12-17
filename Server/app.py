@@ -1,6 +1,7 @@
 import sys
 import json
 import psycopg2
+from sshtunnel import SSHTunnelForwarder
 
 sys.path.append('..')
 try:
@@ -14,13 +15,16 @@ from flask import request
 
 
 app = Flask(__name__)
-database = psycopg2.connect(
-    host="localhost",
-    database="sirs_bombappetit",
-    user="sirs_dbadmin",
-    password="sirs_dbpassword",
-)
 
+tunnel =  SSHTunnelForwarder(
+        ("192.168.0.100", 22),
+        ssh_username="kali",
+        ssh_password="kali",
+        remote_bind_address=('192.168.0.100', 5432))
+
+tunnel.start()
+
+database = psycopg2.connect(host="192.168.0.100", database="sirs_bombappetit", user="sirs_dbadmin", password="sirs_dbpassword")
 CREATE_TABLES = """
 CREATE TABLE IF NOT EXISTS ba_restaurants (
         id              SERIAL PRIMARY KEY,
@@ -55,7 +59,7 @@ if server_private_key is None or server_public_key is None:
     sys.exit(1)
 
 def is_register_operation(message):
-    if not ('public_key' in message and 'operation' in message and message['operation'] == 'register'):
+    if not ('public_key' in message and 'operation' in message and message['operation'] == 'create'):
         return False
     cached_users[message['user_name']] = message['public_key']
     return True
@@ -66,7 +70,7 @@ def read_json_request(json_request):
     if 'content' not in json_request or 'signature' not in json_request:
         return None, "Invalid request: missing content or signature"
 
-    message = json.loads(json_request['content']['json'])
+    message = json.loads(json_request.get('content')).get('json')
     if 'user_name' not in message:
         return None, "Invalid request: missing user_name"
     user_name = message['user_name']
@@ -78,16 +82,16 @@ def read_json_request(json_request):
             if result is None and not is_register_operation(message):
                 # could change to check if message has a public key and use that, for the register endpoint
                 return None, "Invalid request: unknown user"
-            cached_users[user_name] = result[0]
+            elif result is not None:
+                cached_users[user_name] = result[0]
     
     user_public_key = BA.str_to_key(cached_users[user_name])
-    try:
-        json_message, nonce = BA.decrypt_json(json_request['content'], user_public_key, server_private_key, seen_nonces=seen_nonces)
-        if json_message is None:
-            return None, f"Invalid request: {nonce}"
-        seen_nonces.add(nonce)
-    except Exception as e:
-        return None, "Invalid request: signature verification failed"
+    
+    json_message, nonce = BA.decrypt_json(json_request, user_public_key, server_private_key, seen_nonces=seen_nonces)
+    if json_message is None:
+        return None, f"Invalid request: {nonce}"
+    seen_nonces.add(nonce)
+
 
     return json_message, user_name
 
@@ -396,3 +400,7 @@ def api_reviews():
                        (message['restaurant_id'], user_name))
 
         return send_json_response({}, 200)
+
+if __name__ == '__main__':
+    # Run the app on IP address 0.0.0.0 (all available interfaces) and port 5000
+    app.run(host='192.168.2.0', port=5000, ssl_context=('keys/cert_server.pem', 'keys/key_server.pem'))
