@@ -82,16 +82,13 @@ def encrypt_json(json_object, src_private_key, dst_public_key, sections_to_encry
 
             # replace the section in the json
             json_mutable[section] = encrypted_content
-    else:
-        # -- do not encrypt --
-        json_mutable = json.dumps(json_mutable)
 
     json_bytes = json.dumps({
         'json': json_mutable,
         'timestamp': datetime.utcnow().timestamp(),
         'nonce': get_random_bytes(16).hex(),
         'encrypted_sections': sections_to_encrypt if sections_to_encrypt is not None else [],
-        'fully_encrypted': sections_to_encrypt is None,
+        'fully_encrypted': sections_to_encrypt is None and dst_public_key is not None,
     })
 
     if dst_public_key is not None:
@@ -162,7 +159,7 @@ def decrypt_json(encrypted_document, src_public_key, dst_private_key, seen_nonce
         if root_json['nonce'] in seen_nonces:
             return None, "freshness check failed, nonce has been seen before"
 
-        now = datetime.utcnow().timestamp() - 5 # 5 second leeway
+        now = datetime.utcnow().timestamp() - 60 # 60 second leeway
         if root_json['timestamp'] < now:
             return None, "freshness check failed, timestamp is too old"
 
