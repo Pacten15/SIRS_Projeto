@@ -3,6 +3,7 @@ import sys
 import json
 from datetime import datetime
 from base64 import b64encode, b64decode
+from OpenSSL import crypto
 
 from Crypto.Cipher       import AES, PKCS1_v1_5
 from Crypto.Hash         import SHA256
@@ -10,6 +11,7 @@ from Crypto.PublicKey    import RSA
 from Crypto.Random       import get_random_bytes
 from Crypto.Signature    import pkcs1_15
 from Crypto.Util.Padding import pad, unpad
+
 
 def create_key_pair(key_size, public_key_path, private_key_path):
     ''' Creates a RSA key pair of the given key_size in bytes and writes the public key and private key to separate files. '''
@@ -28,6 +30,34 @@ def create_key_pair(key_size, public_key_path, private_key_path):
         private_key_file.write(key.export_key())
     
     return [key.publickey().export_key(), key.export_key()]
+
+def generate_certificate(certificate_path, private_key_path):
+    ''' Generates client key and a certificate. '''
+
+    # Create a key pair
+    key = crypto.PKey()
+    key.generate_key(crypto.TYPE_RSA, 2048)
+
+    # Create a self-signed certificate
+    cert = crypto.X509()
+    cert.get_subject().C = ""
+    cert.get_subject().ST = ""
+    cert.get_subject().L = ""
+    cert.get_subject().O = ""
+    cert.get_subject().CN = ""
+    cert.set_serial_number(1000)
+    cert.gmtime_adj_notBefore(0)
+    cert.gmtime_adj_notAfter(365 * 24 * 60 * 60)  # Valid for 1 year
+    cert.set_issuer(cert.get_subject())
+    cert.set_pubkey(key)
+    cert.sign(key, 'sha256')
+
+    # Write private key and certificate to files
+    with open(private_key_path, "wb") as key_file:
+        key_file.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, key))
+
+    with open(certificate_path, "wb") as cert_file:
+        cert_file.write(crypto.dump_certificate(crypto.FILETYPE_PEM, cert))
 
 
 # --- New functions ---

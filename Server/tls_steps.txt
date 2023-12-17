@@ -2,7 +2,7 @@ openssl req -x509 -newkey rsa:4096 -nodes -out cert.pem -keyout key.pem -days 36
 flask run --cert cert.pem --key key.pem 
 
 
-Create a RSA key pair by:
+Create a RSA key pair for server  by:
 
     Create a private key:
         openssl genpkey -algorithm RSA -out private_server_key.pem

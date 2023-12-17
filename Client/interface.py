@@ -49,6 +49,13 @@ class ClientInterface:
             'public_key': public_key.decode(),
             'operation': 'create' 
         }
+        
+        # Generate certificate and new key pair for it 
+        BA.generate_certificate('certificate/' + username_str + '.pem', 'certificate/' + username_str + 'key.pem')
+
+        self.certificate_client_path = 'certificate/' + username_str + '.pem'
+        self.key_path = 'certificate/' + username_str + 'key.pem'
+    
         private_key = BA.str_to_key(keys[1].decode())
         data = BA.encrypt_json(user_data, private_key, None)
         print(data)
@@ -295,11 +302,8 @@ class ClientInterface:
 if __name__ == "__main__":
     base_url = "https://192.168.2.0:5000/api"  # Replace with your actual base URL
     # Specify the path to your certificate file
-    certificate_client_path = "certificate/cert_client.pem"
-    certificate_server_path = "certificate/certificate_server.pem"
-    key_path = "certificate/key_client.pem"
     username = input("Enter your username: ")
-    client = ClientInterface(base_url, username,certificate_client_path, certificate_server_path, key_path)
+    client = ClientInterface(base_url, username)
     client.loginMenu()
 
    

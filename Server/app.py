@@ -1,6 +1,7 @@
 import sys
 import json
 import psycopg2
+import ssl
 from sshtunnel import SSHTunnelForwarder
 
 sys.path.append('..')
@@ -52,7 +53,7 @@ with database, database.cursor() as db:
 cached_users = {}
 seen_nonces = set()
 
-key_path = 'private_server_key.pem'
+key_path = 'keys/private_server_key.pem'
 server_private_key, server_public_key = BA.load_keypair(key_path)
 if server_private_key is None or server_public_key is None:
     print(f"Could not load server keypair from '{key_path}'")
@@ -403,4 +404,8 @@ def api_reviews():
 
 if __name__ == '__main__':
     # Run the app on IP address 0.0.0.0 (all available interfaces) and port 5000
-    app.run(host='192.168.2.0', port=5000, ssl_context=('keys/cert_server.pem', 'keys/key_server.pem'))
+    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+
+    # Enable server-side authentication
+    context.load_cert_chain(certfile='keys/certificate_server.pem', keyfile='keys/private_server_key.pem')
+    app.run(host='192.168.2.0', port=5000, ssl_context=context)
