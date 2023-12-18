@@ -3,7 +3,6 @@ import sys
 import json
 from datetime import datetime
 from base64 import b64encode, b64decode
-from OpenSSL import crypto
 
 from Crypto.Cipher       import AES, PKCS1_v1_5
 from Crypto.Hash         import SHA256

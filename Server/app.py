@@ -76,15 +76,15 @@ def read_json_request(json_request):
         return None, "Invalid request: missing user_name"
     user_name = message['user_name']
 
-    
-    with database, database.cursor() as db:
-        db.execute("SELECT public_key FROM ba_users WHERE name = (%s);", (user_name,))
-        result = db.fetchone()
-        if result is None and not is_register_operation(message):
-            # could change to check if message has a public key and use that, for the register endpoint
-            return None, "Invalid request: unknown user"
-        elif result is not None:
-            cached_users[user_name] = result[0]
+    if user_name not in cached_users:
+        with database, database.cursor() as db:
+            db.execute("SELECT public_key FROM ba_users WHERE name = (%s);", (user_name,))
+            result = db.fetchone()
+            if result is None and not is_register_operation(message):
+                # could change to check if message has a public key and use that, for the register endpoint
+                return None, "Invalid request: unknown user"
+            elif result is not None:
+                cached_users[user_name] = result[0]
     
     user_public_key = BA.str_to_key(cached_users[user_name])
     
@@ -283,6 +283,7 @@ def api_users():
         with database, database.cursor() as db:
             db.execute("UPDATE ba_users SET public_key = (%s) WHERE name = (%s);",
                        (message['public_key'], message['user_name']))
+        cached_users[message['user_name']] = message['public_key']
         
         return send_json_response({}, 200)
 
@@ -297,7 +298,7 @@ def api_users():
                 return send_json_response({"error": "Cannot delete admin"}, 403)
         elif 'user_name' != "admin" and message['user_name_to_delete'] != message['user_name']:
             return send_json_response({"error": "Cannot delete other users as a user"}, 403)
-
+        cached_users.pop(message['user_name_to_delete'], None)
 
         with database, database.cursor() as db:
             db.execute("DELETE FROM ba_users WHERE name = (%s);", (message['user_name_to_delete'],))
