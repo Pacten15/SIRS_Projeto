@@ -231,16 +231,17 @@ class ClientInterface:
         print("Available commands:")
         print("1.  delete self")
         print("2.  update self keys")
-        print("3.  list restaurants")
-        print("4.  read restaurant")
-        print("5.  list vouchers")
-        print("6.  transfer voucher")
-        print("7.  redeem voucher")
-        print("8.  write review")
-        print("9.  read own reviews")
-        print("10. update review")
-        print("11. delete review")
-        print("12. exit")
+        print("3.  read_user")
+        print("4.  list restaurants")
+        print("5.  read restaurant")
+        print("6.  list vouchers")
+        print("7.  transfer voucher")
+        print("8.  redeem voucher")
+        print("9.  write review")
+        print("10.  read own reviews")
+        print("11. update review")
+        print("12. delete review")
+        print("13. exit")
     
     def help_command_admin(self):
         print("Available commands:")
@@ -268,7 +269,13 @@ class ClientInterface:
             elif choice == "2":
                 self.update_user()
 
-            elif choice == "12":
+            elif choice == "3":
+                usernameToRead = input("Enter the username to read: ")
+                usernameToRead = ''.join(usernameToRead)
+                self.read_user(usernameToRead)
+        
+
+            elif choice == "13":
                 break
             else:
                 print("Invalid choice. Please try again.")
@@ -281,14 +288,22 @@ class ClientInterface:
             choice = input("Enter your choice: ")
 
             if choice == "1":
-                usernameToRead = input("Enter the username to read: ")
-                usernameToRead = ''.join(usernameToRead)
-                self.read_user(usernameToRead)
-
-            elif choice == "2":
                 self.list_all_users()
 
-            elif choice == "10":
+            elif choice == "2":
+                usernameToDelete = input("Enter the username to delete: ")
+                usernameToDelete = ''.join(usernameToDelete)
+                self.delete_user(usernameToDelete)
+            
+            elif choice == "3":
+                self.update_user()
+            
+            elif choice == "4":
+                restaurantInfoPath = input("Enter the path to the restaurant info file: ")
+                restaurantInfoPath = ''.join(restaurantInfoPath)
+                self.create_restaurant(restaurantInfoPath)
+
+            elif choice == "9":
                 break
 
             else:
