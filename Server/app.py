@@ -74,9 +74,12 @@ def update_seen_nonces(nonce):
     if current_second not in seen_nonces_by_time:
         seen_nonces_by_time[current_second] = set({nonce})
 
+    to_delete = []
     for second in seen_nonces_by_time:
         if second < current_second - 60:
-            seen_nonces_by_time.pop(second)
+            to_delete.append(second)
+    for second in to_delete:
+        seen_nonces_by_time.pop(second)
 
 def is_register_operation(message):
     if not ('public_key' in message and 'operation' in message and message['operation'] == 'create'):
@@ -107,10 +110,13 @@ def read_json_request(json_request):
     
     user_public_key = BA.str_to_key(cached_users[user_name])
 
-    json_message, nonce = BA.decrypt_json(json_request, user_public_key, server_private_key, seen_nonces=get_seen_nonces())
-    if json_message is None:
-        return None, f"Invalid request: {nonce}"
-    update_seen_nonces(nonce)
+    try:
+        json_message, nonce = BA.decrypt_json(json_request, user_public_key, server_private_key, seen_nonces=get_seen_nonces())
+        if json_message is None:
+            return None, f"Invalid request: {nonce}"
+        update_seen_nonces(nonce)
+    except ValueError as e:
+        return None, f"Invalid request: {e}"
 
     return json_message, user_name
 
@@ -263,8 +269,8 @@ def api_users():
     # ----- READ -----
     
     if message['operation'] == 'read':
-        if 'user_name' not in message:
-            return send_json_response({"error": "Missing user_name"}, 400)
+        if 'user_name_to_read' not in message:
+            return send_json_response({"error": "Missing user_name_to_read"}, 400)
 
         with database, database.cursor() as db:
             db.execute("SELECT public_key FROM ba_users WHERE name = (%s);", (message['user_name_to_read'],))
