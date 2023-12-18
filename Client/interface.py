@@ -27,10 +27,16 @@ def https_post_requests(url, data, certificate_client_path, key_path, certificat
         try:
             response = requests.post(url, json=data, cert=(certificate_client_path, key_path), verify=certificate_server_path)
             data = response.json()
-            return data
-        except requests.exceptions.RequestException as e:
-            print("Error: Failed to connect to remote server.", e)
-            return None
+            status_code = response.status_code
+            return [data, status_code]
+        except requests.exceptions.HTTPError as errh:
+            print ("Http Error:",errh)
+        except requests.exceptions.ConnectionError as errc:
+            print ("Error Connecting:",errc)
+        except requests.exceptions.Timeout as errt:
+            print ("Timeout Error:",errt)
+        except requests.exceptions.RequestException as err:
+            print ("Something went wrong with the request:",err)
     
 class ClientInterface:
     def __init__(self, base_url, username, certificate_server_path, certificate_client_path, key_path):
@@ -63,44 +69,136 @@ class ClientInterface:
         private_key = BA.str_to_key(self.privkey.decode())
         data = BA.encrypt_json(user_data, private_key, None)
         response = https_post_requests(self.base_url + '/users', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
-        print(response)
+        if response[1] == 201:
+            print("User created successfully.")
+        elif response[1] == 400:
+            # Extract the content from the data dictionary
+            content_json = json.loads(response[0]['content'])
+            # Access the 'error' field within the 'json' key
+            error_message = content_json['json']['error']
+            print(error_message)
+        
+        
     
     def login_user(self):
 
+        
         keys = BA.load_key_pair('keys/' + self.username + '.pubkey', 'keys/' + self.username + '.privkey')
         self.pubkey = keys[0]
         self.privkey = keys[1]
-
         login_data = {
             'user_name': self.username,
             'public_key': self.pubkey.decode(),
             'operation': 'login'
         }
-
         private_key = BA.str_to_key(self.privkey.decode())
         data = BA.encrypt_json(login_data, private_key, None)
         response = https_post_requests(self.base_url + '/users', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
-        print(response)
+        if response[1] == 200:
+            print("User logged in successfully.")
+        else:
+            # Extract the content from the data dictionary
+            content_json = json.loads(response[0]['content'])
+            # Access the 'error' field within the 'json' key
+            error_message = content_json['json']['error']
+            print(error_message)
+        
 
-    def update_user(self, username, name):
-        https_post_requests(self.base_url + '/restaurant', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
+    def update_user(self):
+        keys = BA.create_key_pair(2048, 'keys/' + self.username + '.pubkey', 'keys/' + self.username + '.privkey')
+        public_key = keys[0]
+        private_key = keys[1]
+        update_json = {
+            'user_name': self.username,
+            'public_key': public_key.decode(),
+            'operation': 'update'
+        }
+
+        private_key_old = BA.str_to_key(self.privkey.decode())
+        data = BA.encrypt_json(update_json, private_key_old, None) 
+        response= https_post_requests(self.base_url + '/users', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
+        if response[1] == 200:
+            self.privkey = private_key
+            self.pubkey = public_key
+            print("User updated successfully.")
+        elif response[1] == 400:
+            # Extract the content from the data dictionary
+            content_json = json.loads(response[0]['content'])
+            # Access the 'error' field within the 'json' key
+            error_message = content_json['json']['error']
+            print(error_message)
+    
+    def read_user(self, username):
+        read_json = {
+            'user_name': self.username,
+            'user_name_to_read': username,
+            'operation': 'read'
+        }
+        private_key = BA.str_to_key(self.privkey.decode())
+        data = BA.encrypt_json(read_json, private_key, None)
+        response = https_post_requests(self.base_url + '/users', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
+        if response[1] == 200:
+            content_json = json.loads(response[0]['content'])
+            print("User: " + username + "\nPublic key: " + content_json['json']['public_key'] + "\n")
+        else:
+            # Extract the content from the data dictionary
+            content_json = json.loads(response[0]['content'])
+            # Access the 'error' field within the 'json' key
+            error_message = content_json['json']['error']
+            print(error_message)
+        
+    
+    def list_all_users(self):
+        list_users= {
+            'user_name': self.username,
+            'operation': 'list'
+        }
+
+        private_key = BA.str_to_key(self.privkey.decode())
+        data = BA.encrypt_json(list_users, private_key, None)
+        response = https_post_requests(self.base_url + '/users', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
+
+        if response[1] == 200:
+            content_json = json.loads(response[0]['content'])
+            users = content_json['json']['users']
+            for user in users:
+                print("User: " + user['name'] + "\nPublic key: " + user['public_key'] + "\n")
+
+
+
       
     def delete_user(self, username):
-       data = {
-           'username': username,
-           'operation': 'delete'
-       }
-       https_post_requests(self.base_url + '/users/' + username, data, self.certificate_client_path, self.key_path, self.certificate_server_path)
-       username_str = ''.join(self.username)
-       os.remove('keys/' + username_str + '.pubkey')
-       os.remove('keys/' + username_str + '.privkey')
-        
-        
+        delete_json = {
+            'user_name': self.username,
+            'user_name_to_delete': username,
+            'operation': 'delete'
+        }
+        private_key = BA.str_to_key(self.privkey.decode())
+        data = BA.encrypt_json(delete_json, private_key, None)
+        response = https_post_requests(self.base_url + '/users', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
+        os.remove('keys/' + username + '.pubkey')
+        os.remove('keys/' + username + '.privkey')
+        if response[1] == 200:
+               print("User deleted successfully.")
+        else:
+            # Extract the content from the data dictionary
+            content_json = json.loads(response[0]['content'])
+            # Access the 'error' field within the 'json' key
+            error_message = content_json['json']['error']
+            print(error_message)
+
       
     def create_restaurant(self, restaurantInfoPath):
         
-        data = read_json_file(restaurantInfoPath)
-        https_post_requests(self.base_url + '/restaurant', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
+        restaurantInfo = read_json_file(restaurantInfoPath)
+        createRestaurant = {
+            'user_name': self.username,
+            'data': restaurantInfo
+        }
+        private_key = BA.str_to_key(self.privkey.decode())
+        data = BA.encrypt_json(createRestaurant, private_key, None)
+        response = https_post_requests(self.base_url + '/restaurant', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
+        
     
     def read_all_restaurants(self):
         https_post_requests(self.base_url + '/restaurant', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
@@ -131,26 +229,31 @@ class ClientInterface:
        
     def help_command_client(self):
         print("Available commands:")
-        print ("1. create user")
-        print ("2. delete user")
-        print ("3. read Voucher")
-        print ("4. create Review")
-        print ("5. read Review")
-        print ("6. update Review")
-        print ("7. delete Review")
-        print ("8. exit")
+        print ("1.  delete user")
+        print ("2.  update user")
+        print ("3.  list restaurants")
+        print ("4.  read restaurant")
+        print ("5.  list vouchers")
+        print ("6.  update Voucher")
+        print ("7.  delete Voucher")
+        print ("8.  create Review")
+        print ("9.  read Review")
+        print ("10. update Review")
+        print ("11. delete Review")
+        print ("12. exit")
     
     def help_command_admin(self):
         print("Available commands:")
-        print ("1. create restaurant")
-        print ("2. delete restaurant")
-        print ("3. update restaurant")
-        print ("4. update user")
-        print ("5. delete user")
-        print ("6. create voucher")
-        print ("7. update voucher")
-        print ("8. delete voucher")
-        print ("9. exit")
+        print ("1.  read user")
+        print ("2.  list users")
+        print ("3.  delete user")
+        print ("4.  update admin")
+        print ("5.  create restaurant")
+        print ("6.  list restaurants")
+        print ("7.  read restaurant")
+        print ("8.  delete restaurant")
+        print ("9.  create voucher")
+        print ("10. exit")
 
     def clientMenu(self):
 
@@ -160,55 +263,13 @@ class ClientInterface:
             choice = input("Enter your choice: ")
 
             if choice == "1":
-                status_code = self.register_user(self.username)
-                if status_code is not None:
-                    print("Request status code:", status_code)
-                else:
-                    print("Failed to create request")
-            if choice == "2":
-                status_code = self.delete_user(self.username)
-                if status_code is not None:
-                    print("Request status code:", status_code)
-                    break
-                else:
-                    print("Failed to create request")
-            if choice == "3":
-                status_code = self.read_voucher(self.username)
-                if status_code is not None:
-                    print("Request status code:", status_code)
-                else:
-                    print("Failed to create request")
-            if choice == "4":
-                restaurantId = input("Enter the restaurant id: ")
-                voucherCode = input("Enter the voucher code: ")
-                description = input("Enter the description: ")
-                status_code = self.create_review(self.username, restaurantId, voucherCode, description)
-                if status_code is not None:
-                    print("Request status code:", status_code)
-                else:
-                    print("Failed to create request")
-            if choice == "5":
-                status_code = self.read_review(self.username)
-                if status_code is not None:
-                    print("Request status code:", status_code)
-                else:
-                    print("Failed to create request")
-            if choice == "6":
-                restaurantId = input("Enter the restaurant id: ")
-                voucherCode = input("Enter the voucher code: ")
-                description = input("Enter the description: ")
-                status_code = self.update_review(self.username, restaurantId, voucherCode, description)
-                if status_code is not None:
-                    print("Request status code:", status_code)
-                else:
-                    print("Failed to create request")
-            if choice == "7":
-                status_code = self.delete_review(self.username)
-                if status_code is not None:
-                    print("Request status code:", status_code)
-                else:
-                    print("Failed to create request")
-            if choice == "8":
+                self.delete_user(self.username)
+                break
+
+            elif choice == "2":
+                self.update_user()
+
+            elif choice == "12":
                 break
             else:
                 print("Invalid choice. Please try again.")
@@ -221,70 +282,16 @@ class ClientInterface:
             choice = input("Enter your choice: ")
 
             if choice == "1":
-                restaurantInfoPath = input("Enter the restaurant info path: ")
-                status_code = self.create_restaurant(restaurantInfoPath)
-                if status_code is not None:
-                    print("Request status code:", status_code)
-                else:
-                    print("Failed to create request")
-            if choice == "2":
-                restaurantInfoId = input("Enter the restaurant info id: ")
-                status_code = self.delete_restaurant(restaurantInfoId)
-                if status_code is not None:
-                    print("Request status code:", status_code)
-                else:
-                    print("Failed to create request")
-            if choice == "3":
-                restaurantInfoId = input("Enter the restaurant info id: ")
-                restaurantInfoPath = input("Enter the restaurant info path: ")
-                status_code = self.update_restaurant(restaurantInfoId, restaurantInfoPath)
-                if status_code is not None:
-                    print("Request status code:", status_code)
-                else:
-                    print("Failed to create request")
-            if choice == "4":
-                username = input("Enter the username: ")
-                userNewName = input("Enter the new username: ")
-                status_code = self.update_user(username, userNewName)
-                if status_code is not None:
-                    print("Request status code:", status_code)
-                else:
-                    print("Failed to create request")
-            if choice == "5":
-                username = input("Enter the username: ")
-                status_code = self.delete_user(username)
-                if status_code is not None:
-                    print("Request status code:", status_code)
-                else:
-                    print("Failed to create request")
-            if choice == "6": 
-                username = input("Enter the username: ")
-                restaurantId = input("Enter the restaurant id: ")
-                voucherCode = input("Enter the voucher code: ")
-                description = input("Enter the description: ")
-                status_code = self.create_voucher(username, restaurantId, voucherCode, description)
-                if status_code is not None:
-                    print("Request status code:", status_code)
-                else:
-                    print("Failed to create request")
-            if choice == "7":
-                voucherId = input("Enter the voucher id: ")
-                voucherCode = input("Enter the voucher code: ")
-                description = input("Enter the description: ")
-                status_code = self.update_voucher(voucherId, voucherCode, description)
-                if status_code is not None:
-                    print("Request status code:", status_code)
-                else:
-                    print("Failed to create request")
-            if choice == "8":
-                voucherId = input("Enter the voucher id: ")
-                status_code = self.delete_voucher(voucherId)
-                if status_code is not None:
-                    print("Request status code:", status_code)
-                else:
-                    print("Failed to create request")
-            if choice == "9":
+                usernameToRead = input("Enter the username to read: ")
+                usernameToRead = ''.join(usernameToRead)
+                self.read_user(usernameToRead)
+
+            elif choice == "2":
+                self.list_all_users()
+
+            elif choice == "10":
                 break
+
             else:
                 print("Invalid choice. Please try again.")
     
@@ -297,11 +304,15 @@ class ClientInterface:
 
     
     def loginLogic(self):
-        self.login_user()
-        if(self.username == "admin"):
-            self.adminMenu()
+        if(os.path.isfile('keys/' + self.username + '.pubkey') and os.path.isfile('keys/' + self.username + '.privkey')):
+            self.login_user()
+            if(self.username == "admin"):
+                self.adminMenu()
+            else:
+                self.clientMenu()
         else:
-            self.clientMenu()
+            print("User not registered. Please register first.")
+            self.InterfaceMenu()
 
     def InterfaceMenu(self):
         print("1. Login")
