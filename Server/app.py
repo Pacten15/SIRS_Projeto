@@ -1,7 +1,8 @@
 import sys
 import json
+from datetime import datetime
+
 import psycopg2
-import ssl
 from sshtunnel import SSHTunnelForwarder
 
 sys.path.append('..')
@@ -51,13 +52,31 @@ with database, database.cursor() as db:
     db.execute(CREATE_TABLES)
 
 cached_users = {}
-seen_nonces = set()
+seen_nonces_by_time = {}
 
 key_path = 'keys/private_server_key.pem'
 server_private_key, server_public_key = BA.load_keypair(key_path)
 if server_private_key is None or server_public_key is None:
     print(f"Could not load server keypair from '{key_path}'")
     sys.exit(1)
+
+def get_seen_nonces():
+    ''' Returns a set of the seen nonces.'''
+    seen_nonces = set()
+    for second in seen_nonces_by_time:
+        seen_nonces.update(seen_nonces_by_time[second])
+    return seen_nonces
+
+def update_seen_nonces(nonce):
+    ''' Adds a nonce to the seen nonces for the current second.
+        Also, removes nonces older than a minute.'''
+    current_second = int(datetime.utcnow().timestamp())
+    if current_second not in seen_nonces_by_time:
+        seen_nonces_by_time[current_second] = set({nonce})
+
+    for second in seen_nonces_by_time:
+        if second < current_second - 60:
+            seen_nonces_by_time.pop(second)
 
 def is_register_operation(message):
     if not ('public_key' in message and 'operation' in message and message['operation'] == 'create'):
@@ -87,12 +106,11 @@ def read_json_request(json_request):
                 cached_users[user_name] = result[0]
     
     user_public_key = BA.str_to_key(cached_users[user_name])
-    
-    json_message, nonce = BA.decrypt_json(json_request, user_public_key, server_private_key, seen_nonces=seen_nonces)
+
+    json_message, nonce = BA.decrypt_json(json_request, user_public_key, server_private_key, seen_nonces=get_seen_nonces())
     if json_message is None:
         return None, f"Invalid request: {nonce}"
-    seen_nonces.add(nonce)
-
+    update_seen_nonces(nonce)
 
     return json_message, user_name
 
@@ -425,9 +443,5 @@ def api_reviews():
         return send_json_response({}, 200)
 
 if __name__ == '__main__':
-    # Run the app on IP address 0.0.0.0 (all available interfaces) and port 5000
-    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-
     # Enable server-side authentication
-    context.load_cert_chain(certfile='keys/certificate_server.pem', keyfile='keys/private_server_key.pem')
-    app.run(host='192.168.2.0', port=5000, ssl_context=context)
+    app.run(host='192.168.2.0', port=5000, ssl_context=('keys/certificate_server.pem', 'keys/private_server_key.pem'))
