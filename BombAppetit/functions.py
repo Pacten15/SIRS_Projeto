@@ -42,6 +42,14 @@ def load_key_pair(public_key_path, private_key_path):
 
     return [public_key.export_key(), private_key.export_key()]
 
+def load_public_key(public_key_path):
+    ''' Loads a RSA public key from the given public key file. '''
+    # Load public key
+    with open(public_key_path, 'rb') as public_key_file:
+        public_key = RSA.import_key(public_key_file.read())
+
+    return public_key.export_key()
+
 
 # --- New functions ---
 
