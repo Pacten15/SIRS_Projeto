@@ -141,6 +141,15 @@ def decrypt_json(encrypted_document, src_public_key, dst_private_key, seen_nonce
     if seen_nonces is None:
         seen_nonces = set()
 
+    root_json = json.loads(content)
+    if freshness_check:
+        if root_json['nonce'] in seen_nonces:
+            return None, "freshness check failed, nonce has been seen before"
+
+        now = datetime.utcnow().timestamp() - 60 # 60 second leeway
+        if root_json['timestamp'] < now:
+            return None, "freshness check failed, timestamp is too old"
+
     if encrypted_key is not None:
         # Decrypt AES key and IV with private RSA key
         sentinel = get_random_bytes(32 + 16)
@@ -153,7 +162,6 @@ def decrypt_json(encrypted_document, src_public_key, dst_private_key, seen_nonce
         gen_iv  = gen_key_iv[32:32+16]
         gen_cipher = AES.new(gen_key, AES.MODE_CBC, gen_iv)
 
-    root_json = json.loads(content)
     if root_json['fully_encrypted']:
         # -- decrypt entire json --
         decoded_content = b64decode(root_json['json'].encode('utf-8'))
@@ -175,14 +183,6 @@ def decrypt_json(encrypted_document, src_public_key, dst_private_key, seen_nonce
 
             # replace the section in the json
             json_mutable[section] = json.loads(raw_content)
-
-    if freshness_check:
-        if root_json['nonce'] in seen_nonces:
-            return None, "freshness check failed, nonce has been seen before"
-
-        now = datetime.utcnow().timestamp() - 60 # 60 second leeway
-        if root_json['timestamp'] < now:
-            return None, "freshness check failed, timestamp is too old"
 
     if src_public_key is not None:
         # This will raise an exception if the signature is invalid
