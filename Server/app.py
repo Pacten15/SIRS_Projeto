@@ -28,26 +28,26 @@ tunnel.start()
 
 database = psycopg2.connect(host="192.168.0.100", database="sirs_bombappetit", user="sirs_dbadmin", password="sirs_dbpassword")
 CREATE_TABLES = """
-CREATE TABLE IF NOT EXISTS ba_restaurants (
-        id              SERIAL PRIMARY KEY,
-        data            JSONB NOT NULL
-);
-CREATE TABLE IF NOT EXISTS ba_users (
-        name            TEXT PRIMARY KEY,
-        public_key      TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS ba_vouchers (
-        code            TEXT PRIMARY KEY,
-        description     TEXT NOT NULL,
-        restaurant_id   SERIAL REFERENCES ba_restaurants (id),
-        user_name       TEXT REFERENCES ba_users (name)
-);
-CREATE TABLE IF NOT EXISTS ba_reviews (
-        review          JSONB NOT NULL,
-        restaurant_id   SERIAL REFERENCES ba_restaurants (id),
-        user_name       TEXT REFERENCES ba_users (name),
-        UNIQUE (restaurant_id, user_name)
-);"""
+                CREATE TABLE IF NOT EXISTS ba_restaurants (
+                        id              SERIAL PRIMARY KEY,
+                        data            JSONB NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS ba_users (
+                        name            TEXT PRIMARY KEY,
+                        public_key      TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS ba_vouchers (
+                        code            TEXT PRIMARY KEY,
+                        description     TEXT NOT NULL,
+                        restaurant_id   SERIAL REFERENCES ba_restaurants (id),
+                        user_name       TEXT REFERENCES ba_users (name)
+                );
+                CREATE TABLE IF NOT EXISTS ba_reviews (
+                        review          JSONB NOT NULL,
+                        restaurant_id   SERIAL REFERENCES ba_restaurants (id),
+                        user_name       TEXT REFERENCES ba_users (name),
+                        UNIQUE (restaurant_id, user_name)
+                );"""
 with database, database.cursor() as db:
     db.execute(CREATE_TABLES)
 
@@ -167,7 +167,7 @@ def api_restaurant():
             db.execute("SELECT id, data FROM ba_restaurants;")
             restaurants = db.fetchall()
 
-        return send_json_response({"restaurants": [{"id": id, "data": json.loads(data)}
+        return send_json_response({"restaurants": [{"id": id, "data": data}
                                                    for id, data in restaurants]}, 200)
 
     # ----- READ -----
@@ -183,7 +183,7 @@ def api_restaurant():
         if result is None:
             return send_json_response({"error": "Restaurant not found"}, 404)
         
-        restaurant = json.loads(result[0])
+        restaurant = result[0]
         
         # get vouchers for restaurant and add to response
         with database, database.cursor() as db:
@@ -200,7 +200,7 @@ def api_restaurant():
         
         restaurant['reviews'] = [json.loads(review) for review in reviews]
 
-        return send_json_response({"restaurantInfo": json.loads(result[0])}, 200, user_name, sections_to_encrypt=['mealVouchers'])
+        return send_json_response({"restaurantInfo": result[0] }, 200, user_name, sections_to_encrypt=['mealVouchers'])
 
     # ----- UPDATE -----
 
