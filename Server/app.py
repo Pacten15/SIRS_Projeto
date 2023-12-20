@@ -190,17 +190,17 @@ def api_restaurant():
             db.execute("SELECT code, description FROM ba_vouchers WHERE restaurant_id = (%s) AND user_name = (%s);",
                        (message['id'], user_name))
             vouchers = db.fetchall()
-        
-        restaurant['mealVouchers'] = [{"code": code, "description": description} for code, description in vouchers]
+        print(vouchers)
+        restaurant['mealVouchers'] = list({"code": code, "description": description} for code, description in vouchers)
 
         # get reviews for restaurant and add to response
         with database, database.cursor() as db:
             db.execute("SELECT review FROM ba_reviews WHERE restaurant_id = (%s);", (message['id'],))
             reviews = db.fetchall()
         print(reviews)
-        restaurant['reviews'] = [{"review": review} for review in reviews]
-
-        return send_json_response({"restaurantInfo": result[0] }, 200, user_name, sections_to_encrypt=['mealVouchers'])
+        restaurant['reviews'] = list({"review": review[0]} for review in reviews)
+        print(restaurant)
+        return send_json_response(restaurant, 200, user_name, sections_to_encrypt=['mealVouchers'])
 
     # ----- UPDATE -----
 
@@ -227,6 +227,8 @@ def api_restaurant():
             return send_json_response({"error": "Missing id"}, 400)
 
         with database, database.cursor() as db:
+            db.execute("DELETE FROM ba_vouchers WHERE restaurant_id = (%s);", (message['id'],))
+            db.execute("DELETE FROM ba_reviews WHERE restaurant_id = (%s);", (message['id'],))
             db.execute("DELETE FROM ba_restaurants WHERE id = (%s);", (message['id'],))
 
         return send_json_response({}, 200)
@@ -325,6 +327,8 @@ def api_users():
         cached_users.pop(message['user_name_to_delete'], None)
 
         with database, database.cursor() as db:
+            db.execute("DELETE FROM ba_vouchers WHERE user_name = (%s);", (message['user_name_to_delete'],))
+            db.execute("DELETE FROM ba_reviews WHERE user_name = (%s);", (message['user_name_to_delete'],))
             db.execute("DELETE FROM ba_users WHERE name = (%s);", (message['user_name_to_delete'],))
 
         return send_json_response({}, 200)
