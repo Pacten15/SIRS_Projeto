@@ -294,22 +294,23 @@ class ClientInterface:
             restaurantInfo, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
             update_seen_nonces(nonce)
 
-
             reviews = restaurantInfo.pop('reviews')
-            if len(reviews) > 0:
-                self.get_all_user_keys()
-                for review in reviews:
-                    content = json.loads(review.get('content')).get('json')
-                    username = content.get('user_name')
-                    user_key = self.user_keys.get(username)
-
-                    rev, _ = BA.decrypt_json(review['review'], user_key, None, freshness_check=False)
-                    print(rev)
 
             print("Restaurant id: " + str(restaurantId) + "\nRestaurant data: ")
-            print(restaurantInfo)
+            print(json.dumps(restaurantInfo, indent=4, ensure_ascii=False))
 
-            print("\nReviews: ")
+            if len(reviews) > 0:
+                print("\nReviews: ")
+                self.get_all_user_keys()
+                for review in reviews:
+                    content = json.loads(review['review'].get('content')).get('json')
+                    username = content.get('user_name')
+                    user_key = self.user_keys.get(username)
+                    user_key = BA.str_to_key(user_key)
+                    rev, _ = BA.decrypt_json(review['review'], user_key, None, freshness_check=False)
+                    print(rev)
+                print()
+                    
         else:
             json_object, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
             update_seen_nonces(nonce)
