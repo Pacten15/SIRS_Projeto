@@ -220,12 +220,20 @@ class ClientInterface:
         data = BA.encrypt_json(read_json, private_key, None)
         response = https_post_requests(self.base_url + '/restaurants', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
         if response[1] == 200:
-            content_json = json.loads(response[0]['content'])
-            restaurantInfo = content_json['json']['restaurantInfo']
-            voucherInfo = content_json['json']['voucherInfo']
-            print("restaurant: " + str(restaurantId) + "\n")
+            
+            response_data = response[0]
+
+            #Get public key from server that is stored in the keys folder
+            server_public_key_bytes = BA.load_public_key('keys/public_server_key.key')
+            server_public_key = BA.str_to_key(server_public_key_bytes.decode())
+
+            decrypted_data = BA.decrypt_json(response_data, server_public_key, private_key)
+            restaurantInfo = decrypted_data[0]
+            nonce = decrypted_data[1]
+            print("Restaurant id: " + str(restaurantId) + "\nRestaurant data: ")
             print(restaurantInfo)
-            print("\n")
+            print("\nNonce: ")
+            print(nonce)
         else:
             # Extract the content from the data dictionary
             content_json = json.loads(response[0]['content'])
@@ -246,9 +254,8 @@ class ClientInterface:
             content_json = json.loads(response[0]['content'])
             restaurants = content_json['json']['restaurants']
             for restaurant in restaurants:
-                print("Restaurant: " + str(restaurant['id']) + "\nRestaurant id: \n")
+                print("\nRestaurant_id : " + str(restaurant['id']) + "\n\nRestaurant_data: \n")
                 print(restaurant['data'])
-                print("\n")
 
         
 
@@ -294,39 +301,201 @@ class ClientInterface:
     def create_voucher(self, username, restaurantId, voucherCode, description):
     
         data = {
-            'user_name': username,
+            'user_name': self.username,
+            'user_name_voucher': username,
             'restaurant_id': restaurantId,
             'code': voucherCode,
-            'description': description
+            'description': description,
+            'operation': 'create'
         }
         private_key = BA.str_to_key(self.privkey.decode())
-        data = BA.encrypt_json(data, private_key, None)
 
-        https_post_requests(self.base_url + '/vouchers', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
+        #Get public key from server that is stored in the keys folder
+        server_public_key_bytes = BA.load_public_key('keys/public_server_key.key')
+        server_public_key = BA.str_to_key(server_public_key_bytes.decode())
+
+        data = BA.encrypt_json(data, private_key, server_public_key, sections_to_encrypt=['code', 'description'])
+
+        response = https_post_requests(self.base_url + '/vouchers', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
+        if response[1] == 201:
+            print("Voucher created successfully.")
+        else:
+            # Extract the content from the data dictionary
+            content_json = json.loads(response[0]['content'])
+            # Access the 'error' field within the 'json' key
+            error_message = content_json['json']['error']
+            print(error_message)
+    
+    def list_vouchers(self):
+        list_json = {
+            'user_name': self.username,
+            'operation': 'list'
+        }
+        private_key = BA.str_to_key(self.privkey.decode())
+        data = BA.encrypt_json(list_json, private_key, None)
+        response = https_post_requests(self.base_url + '/vouchers', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
         
+        response_data = response[0]
+
+        #Get public key from server that is stored in the keys folder
+        server_public_key_bytes = BA.load_public_key('keys/public_server_key.key')
+        server_public_key = BA.str_to_key(server_public_key_bytes.decode())
         
-    def update_voucher(self, voucherId, voucherCode, description):
-        https_post_requests(self.base_url + '/vouchers' + voucherId, data, self.certificate_client_path, self.key_path, self.certificate_server_path)
+        decrypted_data = BA.decrypt_json(response_data, server_public_key, private_key)
+        content = decrypted_data[0]
+        nonce = decrypted_data[1]
+        vouchers = content['vouchers']
+        print("\nThe user " + self.username + " has the following vouchers:")
+        for voucher in vouchers:
+            print("\nCode: " + voucher['code'] + "| Description: " + voucher['description'] + "| Restaurant id: " + str(voucher['restaurant_id']) + "\n")
+
+
+        
+    def transfer_voucher(self, newUser, voucherCode):
+        transfer_json = {
+            'user_name': self.username,
+            'new_user': newUser,
+            'code': voucherCode,
+            'operation': 'update'
+        }
+        private_key = BA.str_to_key(self.privkey.decode())
+
+        #Get public key from server that is stored in the keys folder
+        server_public_key_bytes = BA.load_public_key('keys/public_server_key.key')
+        server_public_key = BA.str_to_key(server_public_key_bytes.decode())
+
+        data = BA.encrypt_json(transfer_json, private_key, server_public_key, sections_to_encrypt=['code'])
+        response = https_post_requests(self.base_url + '/vouchers', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
+        if response[1] == 200:
+            print("Voucher transferred successfully.")
+        else:
+            # Extract the content from the data dictionary
+            content_json = json.loads(response[0]['content'])
+            # Access the 'error' field within the 'json' key
+            error_message = content_json['json']['error']
+            print(error_message)
         
     
-    def delete_voucher(self, voucherId):
-        https_post_requests(self.base_url + '/vouchers' + voucherId, self.certificate_client_path, self.key_path, self.certificate_server_path)
+    def use_voucher(self, code):
+        use_json = {
+            'user_name': self.username,
+            'code': code,
+            'operation': 'delete'
+        }
+        private_key = BA.str_to_key(self.privkey.decode())
+
+        #Get public key from server that is stored in the keys folder
+        server_public_key_bytes = BA.load_public_key('keys/public_server_key.key')
+        server_public_key = BA.str_to_key(server_public_key_bytes.decode())
+        
+        data = BA.encrypt_json(use_json, private_key, server_public_key, sections_to_encrypt=['code'])
+        response = https_post_requests(self.base_url + '/vouchers', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
+        if response[1] == 200:
+            print("Voucher used successfully.")
+        else:
+            # Extract the content from the data dictionary
+            content_json = json.loads(response[0]['content'])
+            error_message = content_json['json']['error']
+            print(error_message)
+
+    def write_review(self, restaurantId, score, comment):
+        private_key = BA.str_to_key(self.privkey.decode())
+        review = {
+            'user_name': self.username,
+            'score': score,
+            'comment': comment
+        }
+        write_json = {
+            'user_name': self.username,
+            'restaurant_id': restaurantId,
+            'review': review,
+            'operation': 'create'
+        }
+        data = BA.encrypt_json(write_json, private_key, None)
+        response = https_post_requests(self.base_url + '/reviews', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
+        if response[1] == 201:
+            print("Review created successfully.")
+        else:
+            content_json = json.loads(response[0]['content'])
+            error_message = content_json['json']['error']
+            print(error_message)
+    
+    def read_own_reviews(self):
+        read_json = {
+            'user_name': self.username,
+            'operation': 'list'
+        }
+        private_key = BA.str_to_key(self.privkey.decode())
+        data = BA.encrypt_json(read_json, private_key, None)
+        response = https_post_requests(self.base_url + '/reviews', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
+        if response[1] == 200:
+            content_json = json.loads(response[0]['content'])
+            reviews = content_json['json']['reviews']
+            for review in reviews:
+                score = review['review']['score']
+                comment = review['review']['comment']
+                print("\nReview_Score: " + score + "| Review_Comment: " + comment + "| Restaurant: " + str(review['restaurant_id']) + "\n")
+        else:
+            content_json = json.loads(response[0]['content'])
+            error_message = content_json['json']['error']
+            print(error_message)
+
+
+    def update_review(self, restaurantId, score, comment):
+        private_key = BA.str_to_key(self.privkey.decode())
+        review = {
+            'user_name': self.username,
+            'score': score,
+            'comment': comment
+        }
+        update_json = {
+            'user_name': self.username,
+            'restaurant_id': restaurantId,
+            'review': review,
+            'operation': 'update'
+        }
+        
+        data = BA.encrypt_json(update_json, private_key, None)
+        response = https_post_requests(self.base_url + '/reviews', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
+        if response[1] == 200:
+            print("Review updated successfully.")
+        else:
+            content_json = json.loads(response[0]['content'])
+            error_message = content_json['json']['error']
+            print(error_message)
+
+    def delete_review(self, restaurantId):
+        delete_json = {
+            'user_name': self.username,
+            'restaurant_id': restaurantId,
+            'operation': 'delete'
+        }
+        private_key = BA.str_to_key(self.privkey.decode())
+        data = BA.encrypt_json(delete_json, private_key, None)
+        response = https_post_requests(self.base_url + '/reviews', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
+        if response[1] == 200:
+            print("Review deleted successfully.")
+        else:
+            content_json = json.loads(response[0]['content'])
+            error_message = content_json['json']['error']
+            print(error_message)    
        
     def help_command_client(self):
         print("Available commands:")
         print("1.  delete self")
         print("2.  update self keys")
         print("3.  read_user")
-        print("4.  list restaurants")
-        print("5.  read restaurant")
-        print("6.  list vouchers")
-        print("7.  transfer voucher")
-        print("8.  redeem voucher")
-        print("9.  write review")
-        print("10. read own reviews")
-        print("11. update review")
-        print("12. delete review")
-        print("13. exit")
+        print("4.  list users")
+        print("5.  list restaurants")
+        print("6.  read restaurant")
+        print("7.  list vouchers")
+        print("8.  transfer voucher")
+        print("9.  redeem voucher")
+        print("10.  write review")
+        print("11. read own reviews")
+        print("12. update review")
+        print("13. delete review")
+        print("14. exit")
     
     def help_command_admin(self):
         print("Available commands:")
@@ -359,9 +528,52 @@ class ClientInterface:
                 usernameToRead = input("Enter the username to read: ")
                 usernameToRead = ''.join(usernameToRead)
                 self.read_user(usernameToRead)
-        
+            
+            elif choice == "4":
+                self.list_all_users()
+
+            elif choice == "5":
+                self.list_restaurants()
+            
+            elif choice == "6":
+                restaurantId = input("Enter the restaurant id: ")
+                self.read_restaurant(restaurantId)
+            
+            elif choice == "7":
+                self.list_vouchers()
+            
+            elif choice == "8":
+                newUser = input("Enter the new user: ")
+                voucherCode = input("Enter the voucher code: ")
+                voucherCode = ''.join(voucherCode)
+                self.transfer_voucher(newUser, voucherCode)
+            
+            elif choice == "9":
+                voucherCode = input("Enter the voucher code: ")
+                self.use_voucher(voucherCode)
+            
+            elif choice == "10":
+                restaurantId = input("Enter the restaurant id: ")
+                score = input("Enter the score: ")
+                comment = input("Enter the comment: ")
+                comment = ''.join(comment)
+                self.write_review(restaurantId, score, comment)
+            
+            elif choice == "11":
+                self.read_own_reviews()
+            
+            elif choice == "12":
+                reviewId = input("Enter the restaurant id: ")
+                score = input("Enter the score: ")
+                comment = input("Enter the comment: ")
+                comment = ''.join(comment)
+                self.update_review(reviewId, score, comment)
 
             elif choice == "13":
+                reviewId = input("Enter the restaurant id: ")
+                self.delete_review(reviewId)
+
+            elif choice == "14":
                 break
             else:
                 print("Invalid choice. Please try again.")
@@ -405,6 +617,16 @@ class ClientInterface:
             elif choice == "8":
                 restaurantId = input("Enter the restaurant id: ")
                 self.delete_restaurant(restaurantId)
+            
+            elif choice == "9":
+                username = input("Enter the username: ")
+                username = ''.join(username)
+                restaurantId = input("Enter the restaurant id: ")
+                voucherCode = input("Enter the voucher code: ")
+                voucherCode = ''.join(voucherCode)
+                description = input("Enter the voucher description: ")
+                description = ''.join(description)
+                self.create_voucher(username, restaurantId, voucherCode, description)
 
             elif choice == "10":
                 break
