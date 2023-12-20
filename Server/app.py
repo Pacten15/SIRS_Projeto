@@ -263,8 +263,7 @@ def api_users():
             db.execute("SELECT name, public_key FROM ba_users;")
             users = db.fetchall()
 
-        return send_json_response({"users": [{"name": name, "public_key": public_key}
-                                             for name, public_key in users]}, 200)
+        return send_json_response({"users": [{"name": name, "public_key": public_key} for name, public_key in users]}, 200)
 
     # ----- READ -----
     

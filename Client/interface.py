@@ -1,14 +1,42 @@
+import os
+import sys
 import json
 import requests
-import os 
-import sys
+from datetime import datetime
+
 import warnings
 from urllib3.exceptions import SubjectAltNameWarning
 warnings.filterwarnings('ignore', category=SubjectAltNameWarning)
 
-sys.path.insert(1, os.path.join(sys.path[0], '..'))
-import BombAppetit as BA
+sys.path.append("..")
+try:
+    import BombAppetit as BA
+except ImportError:
+    print("Import failed. Install dependencies with: pip3 install -r requirements.txt")
+    sys.exit(1)
 
+seen_nonces_by_time = {}
+
+def get_seen_nonces():
+    ''' Returns a set of the seen nonces.'''
+    seen_nonces = set()
+    for second in seen_nonces_by_time:
+        seen_nonces.update(seen_nonces_by_time[second])
+    return seen_nonces
+
+def update_seen_nonces(nonce):
+    ''' Adds a nonce to the seen nonces for the current second.
+        Also, removes nonces older than a minute.'''
+    current_second = int(datetime.utcnow().timestamp())
+    if current_second not in seen_nonces_by_time:
+        seen_nonces_by_time[current_second] = set({nonce})
+
+    to_delete = []
+    for second in seen_nonces_by_time:
+        if second < current_second - 60:
+            to_delete.append(second)
+    for second in to_delete:
+        seen_nonces_by_time.pop(second)
 
 
 def read_json_file(file_path):
@@ -37,9 +65,9 @@ def https_post_requests(url, data, certificate_client_path, key_path, certificat
             print ("Timeout Error:",errt)
         except requests.exceptions.RequestException as err:
             print ("Something went wrong with the request:",err)
-    
+
 class ClientInterface:
-    def __init__(self, base_url, username, certificate_server_path, certificate_client_path, key_path):
+    def __init__(self, base_url, username, certificate_server_path, certificate_client_path, key_path, server_public_key_path):
         self.base_url = base_url
         self.username = ''.join(username)
         self.certificate_client_path = certificate_client_path
@@ -47,10 +75,12 @@ class ClientInterface:
         self.certificate_server_path = certificate_server_path
         self.privkey = None
         self.pubkey = None
-        
+        self.server_pubkey = BA.load_public_key(server_public_key_path)
+        self.user_keys = {}
+
+    # --- USER ---
 
     def register_user(self):
-
         # Create key pair
         keys = BA.create_key_pair(2048, 'keys/' + self.username + '.pubkey', 'keys/' + self.username + '.privkey')
         public_key = keys[0]
@@ -67,22 +97,22 @@ class ClientInterface:
         self.privkey = keys[1]
 
         private_key = BA.str_to_key(self.privkey.decode())
+        server_public_key = BA.str_to_key(self.server_pubkey.decode())
+
         data = BA.encrypt_json(user_data, private_key, None)
         response = https_post_requests(self.base_url + '/users', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
         if response[1] == 201:
+            _, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
             print("User created successfully.")
         elif response[1] == 400:
-            # Extract the content from the data dictionary
-            content_json = json.loads(response[0]['content'])
-            # Access the 'error' field within the 'json' key
-            error_message = content_json['json']['error']
+            json_object, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
+            error_message = json_object.get('error')
             print(error_message)
-        
-        
-    
-    def login_user(self):
 
-        
+
+    def login_user(self):
         keys = BA.load_key_pair('keys/' + self.username + '.pubkey', 'keys/' + self.username + '.privkey')
         self.pubkey = keys[0]
         self.privkey = keys[1]
@@ -92,17 +122,20 @@ class ClientInterface:
             'operation': 'login'
         }
         private_key = BA.str_to_key(self.privkey.decode())
+        server_public_key = BA.str_to_key(self.server_pubkey.decode())
+
         data = BA.encrypt_json(login_data, private_key, None)
         response = https_post_requests(self.base_url + '/users', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
         if response[1] == 200:
+            _, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
             print("User logged in successfully.")
         else:
-            # Extract the content from the data dictionary
-            content_json = json.loads(response[0]['content'])
-            # Access the 'error' field within the 'json' key
-            error_message = content_json['json']['error']
+            json_object, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
+            error_message = json_object.get('error')
             print(error_message)
-        
+
 
     def update_user(self):
         keys = BA.create_key_pair(2048, 'keys/' + self.username + '.pubkey', 'keys/' + self.username + '.privkey')
@@ -115,19 +148,23 @@ class ClientInterface:
         }
 
         private_key_old = BA.str_to_key(self.privkey.decode())
+        server_public_key = BA.str_to_key(self.server_pubkey.decode())
+
         data = BA.encrypt_json(update_json, private_key_old, None) 
         response= https_post_requests(self.base_url + '/users', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
         if response[1] == 200:
+            _, nonce = BA.decrypt_json(response[0], server_public_key, private_key_old, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
             self.privkey = private_key
             self.pubkey = public_key
             print("User updated successfully.")
         elif response[1] == 400:
-            # Extract the content from the data dictionary
-            content_json = json.loads(response[0]['content'])
-            # Access the 'error' field within the 'json' key
-            error_message = content_json['json']['error']
+            json_object, nonce = BA.decrypt_json(response[0], server_public_key, private_key_old, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
+            error_message = json_object.get('error')
             print(error_message)
-    
+
+
     def read_user(self, username):
         read_json = {
             'user_name': self.username,
@@ -135,19 +172,22 @@ class ClientInterface:
             'operation': 'read'
         }
         private_key = BA.str_to_key(self.privkey.decode())
+        server_public_key = BA.str_to_key(self.server_pubkey.decode())
+
         data = BA.encrypt_json(read_json, private_key, None)
         response = https_post_requests(self.base_url + '/users', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
         if response[1] == 200:
-            content_json = json.loads(response[0]['content'])
-            print("User: " + username + "\nPublic key: " + content_json['json']['public_key'] + "\n")
+            json_object, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
+            public_key = json_object.get('public_key')
+            print("User: " + username + "\nPublic key: " + public_key + "\n")
         else:
-            # Extract the content from the data dictionary
-            content_json = json.loads(response[0]['content'])
-            # Access the 'error' field within the 'json' key
-            error_message = content_json['json']['error']
+            json_object, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
+            error_message = json_object.get('error')
             print(error_message)
-        
-    
+
+
     def list_all_users(self):
         list_users= {
             'user_name': self.username,
@@ -155,18 +195,24 @@ class ClientInterface:
         }
 
         private_key = BA.str_to_key(self.privkey.decode())
+        server_public_key = BA.str_to_key(self.server_pubkey.decode())
+
         data = BA.encrypt_json(list_users, private_key, None)
         response = https_post_requests(self.base_url + '/users', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
 
         if response[1] == 200:
-            content_json = json.loads(response[0]['content'])
-            users = content_json['json']['users']
+            json_object, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
+
+            users = json_object.get('users')
             for user in users:
-                print("User: " + user['name'] + "\nPublic key: " + user['public_key'] + "\n")
+                print("User: " + user.get('name') + "\nPublic key: " + user.get('public_key') + "\n")
+        else:
+            json_object, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            error_message = json_object.get('error')
+            print(error_message)
 
 
-
-      
     def delete_user(self, username):
         delete_json = {
             'user_name': self.username,
@@ -174,22 +220,25 @@ class ClientInterface:
             'operation': 'delete'
         }
         private_key = BA.str_to_key(self.privkey.decode())
+        server_public_key = BA.str_to_key(self.server_pubkey.decode())
+
         data = BA.encrypt_json(delete_json, private_key, None)
         response = https_post_requests(self.base_url + '/users', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
-        os.remove('keys/' + username + '.pubkey')
-        os.remove('keys/' + username + '.privkey')
         if response[1] == 200:
-               print("User deleted successfully.")
+            _, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
+            os.remove('keys/' + username + '.pubkey')
+            os.remove('keys/' + username + '.privkey')
+            print("User deleted successfully.")
         else:
-            # Extract the content from the data dictionary
-            content_json = json.loads(response[0]['content'])
-            # Access the 'error' field within the 'json' key
-            error_message = content_json['json']['error']
+            json_object, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
+            error_message = json_object.get('error')
             print(error_message)
 
-      
+    # --- RESTAURANT ---
+
     def create_restaurant(self, restaurantInfoPath):
-        
         restaurantInfo = read_json_file(restaurantInfoPath)
         create_json = {
             'user_name': self.username,
@@ -197,18 +246,38 @@ class ClientInterface:
             'operation': 'create'
         }
         private_key = BA.str_to_key(self.privkey.decode())
+        server_public_key = BA.str_to_key(self.server_pubkey.decode())
+
         data = BA.encrypt_json(create_json, private_key, None)
         response = https_post_requests(self.base_url + '/restaurants', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
         if response[1] == 201:
-            content_json = json.loads(response[0]['content'])
-            print("Restaurant created successfully with id " + str(content_json['json']['id']) + " .")
+            json_object, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
+            print("Restaurant created successfully with id " + str(json_object.get('id')) + " .")
         else:
-            # Extract the content from the data dictionary
-            content_json = json.loads(response[0]['content'])
-            # Access the 'error' field within the 'json' key
-            error_message = content_json['json']['error']
+            json_object, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
+            error_message = json_object.get('error')
             print(error_message)
-    
+
+    def get_all_user_keys(self):
+        list_users= {
+            'user_name': self.username,
+            'operation': 'list'
+        }
+        private_key = BA.str_to_key(self.privkey.decode())
+        server_public_key = BA.str_to_key(self.server_pubkey.decode())
+
+        data = BA.encrypt_json(list_users, private_key, None)
+        response = https_post_requests(self.base_url + '/users', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
+
+        if response[1] == 200:
+            json_object, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
+
+            users = json_object.get('users')
+            for user in users:
+                self.user_keys[user.get('name')] = user.get('public_key')
 
     def read_restaurant(self, restaurantId):
         read_json = {
@@ -217,47 +286,59 @@ class ClientInterface:
             'operation': 'read'
         }
         private_key = BA.str_to_key(self.privkey.decode())
+        server_public_key = BA.str_to_key(self.server_pubkey.decode())
+
         data = BA.encrypt_json(read_json, private_key, None)
         response = https_post_requests(self.base_url + '/restaurants', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
         if response[1] == 200:
-            
-            response_data = response[0]
+            restaurantInfo, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
 
-            #Get public key from server that is stored in the keys folder
-            server_public_key_bytes = BA.load_public_key('keys/public_server_key.key')
-            server_public_key = BA.str_to_key(server_public_key_bytes.decode())
 
-            decrypted_data = BA.decrypt_json(response_data, server_public_key, private_key)
-            restaurantInfo = decrypted_data[0]
-            nonce = decrypted_data[1]
+            reviews = restaurantInfo.pop('reviews')
+            if len(reviews) > 0:
+                self.get_all_user_keys()
+                for review in reviews:
+                    content = json.loads(review.get('content')).get('json')
+                    username = content.get('user_name')
+                    user_key = self.user_keys.get(username)
+
+                    rev, _ = BA.decrypt_json(review['review'], user_key, None, freshness_check=False)
+                    print(rev)
+
             print("Restaurant id: " + str(restaurantId) + "\nRestaurant data: ")
             print(restaurantInfo)
-            print("\nNonce: ")
-            print(nonce)
+
+            print("\nReviews: ")
         else:
-            # Extract the content from the data dictionary
-            content_json = json.loads(response[0]['content'])
-            # Access the 'error' field within the 'json' key
-            error_message = content_json['json']['error']
+            json_object, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
+            error_message = json_object.get('error')
             print(error_message)
-        
-    
+
+
     def list_restaurants(self):
         list_json = {
             'user_name': self.username,
             'operation': 'list'
         }
         private_key = BA.str_to_key(self.privkey.decode())
+        server_public_key = BA.str_to_key(self.server_pubkey.decode())
+
         data = BA.encrypt_json(list_json, private_key, None)
         response = https_post_requests(self.base_url + '/restaurants', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
         if response[1] == 200:
-            content_json = json.loads(response[0]['content'])
-            restaurants = content_json['json']['restaurants']
-            for restaurant in restaurants:
-                print("\nRestaurant_id : " + str(restaurant['id']) + "\n\nRestaurant_data: \n")
-                print(restaurant['data'])
+            json_object, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
 
-        
+            restaurants = json_object.get('restaurants')
+            if restaurants is None:
+                print("No restaurants found.")
+                return
+            for restaurant in restaurants:
+                print("\nRestaurant_id : " + str(restaurant.get('id')) + "\n\nRestaurant_data: \n")
+                print(restaurant.get('data'))
+
 
     def delete_restaurant(self, restaurantInfoId):
         delete_json = {
@@ -266,17 +347,21 @@ class ClientInterface:
             'operation': 'delete'
         }
         private_key = BA.str_to_key(self.privkey.decode())
+        server_public_key = BA.str_to_key(self.server_pubkey.decode())
+
         data = BA.encrypt_json(delete_json, private_key, None)
         response = https_post_requests(self.base_url + '/restaurants', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
         if response[1] == 200:
+            _, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
             print("Restaurant deleted successfully.")
         else:
-            # Extract the content from the data dictionary
-            content_json = json.loads(response[0]['content'])
-            # Access the 'error' field within the 'json' key
-            error_message = content_json['json']['error']
+            json_object, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
+            error_message = json_object.get('error')
             print(error_message)
-        
+
+
     def update_restaurant(self, restaurantInfoId, restaurantInfoPath):
         restaurantInfo = read_json_file(restaurantInfoPath)
         update_json = {
@@ -286,20 +371,23 @@ class ClientInterface:
             'operation': 'update'
         }
         private_key = BA.str_to_key(self.privkey.decode())
+        server_public_key = BA.str_to_key(self.server_pubkey.decode())
+
         data = BA.encrypt_json(update_json, private_key, None)
         response = https_post_requests(self.base_url + '/restaurants', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
         if response[1] == 200:
+            _, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
             print("Restaurant updated successfully.")
         else:
-            # Extract the content from the data dictionary
-            content_json = json.loads(response[0]['content'])
-            # Access the 'error' field within the 'json' key
-            error_message = content_json['json']['error']
+            json_object, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
+            error_message = json_object.get('error')
             print(error_message)
-        
-       
+
+    # --- VOUCHER ---
+
     def create_voucher(self, username, restaurantId, voucherCode, description):
-    
         data = {
             'user_name': self.username,
             'user_name_voucher': username,
@@ -309,23 +397,21 @@ class ClientInterface:
             'operation': 'create'
         }
         private_key = BA.str_to_key(self.privkey.decode())
-
-        #Get public key from server that is stored in the keys folder
-        server_public_key_bytes = BA.load_public_key('keys/public_server_key.key')
-        server_public_key = BA.str_to_key(server_public_key_bytes.decode())
-
+        server_public_key = BA.str_to_key(self.server_pubkey.decode())
         data = BA.encrypt_json(data, private_key, server_public_key, sections_to_encrypt=['code', 'description'])
 
         response = https_post_requests(self.base_url + '/vouchers', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
         if response[1] == 201:
+            _, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
             print("Voucher created successfully.")
         else:
-            # Extract the content from the data dictionary
-            content_json = json.loads(response[0]['content'])
-            # Access the 'error' field within the 'json' key
-            error_message = content_json['json']['error']
+            json_object, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
+            error_message = json_object.get('error')
             print(error_message)
-    
+
+
     def list_vouchers(self):
         list_json = {
             'user_name': self.username,
@@ -334,23 +420,23 @@ class ClientInterface:
         private_key = BA.str_to_key(self.privkey.decode())
         data = BA.encrypt_json(list_json, private_key, None)
         response = https_post_requests(self.base_url + '/vouchers', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
-        
+
         response_data = response[0]
 
-        #Get public key from server that is stored in the keys folder
-        server_public_key_bytes = BA.load_public_key('keys/public_server_key.key')
-        server_public_key = BA.str_to_key(server_public_key_bytes.decode())
-        
-        decrypted_data = BA.decrypt_json(response_data, server_public_key, private_key)
-        content = decrypted_data[0]
-        nonce = decrypted_data[1]
-        vouchers = content['vouchers']
+        server_public_key = BA.str_to_key(self.server_pubkey.decode())
+        content, nonce = BA.decrypt_json(response_data, server_public_key, private_key, seen_nonces=get_seen_nonces())
+        update_seen_nonces(nonce)
+        vouchers = content.get('vouchers')
+
+        if vouchers is None:
+            print("No vouchers found.")
+            return
+
         print("\nThe user " + self.username + " has the following vouchers:")
         for voucher in vouchers:
             print("\nCode: " + voucher['code'] + "| Description: " + voucher['description'] + "| Restaurant id: " + str(voucher['restaurant_id']) + "\n")
 
 
-        
     def transfer_voucher(self, newUser, voucherCode):
         transfer_json = {
             'user_name': self.username,
@@ -359,23 +445,21 @@ class ClientInterface:
             'operation': 'update'
         }
         private_key = BA.str_to_key(self.privkey.decode())
-
-        #Get public key from server that is stored in the keys folder
-        server_public_key_bytes = BA.load_public_key('keys/public_server_key.key')
-        server_public_key = BA.str_to_key(server_public_key_bytes.decode())
+        server_public_key = BA.str_to_key(self.server_pubkey.decode())
 
         data = BA.encrypt_json(transfer_json, private_key, server_public_key, sections_to_encrypt=['code'])
         response = https_post_requests(self.base_url + '/vouchers', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
         if response[1] == 200:
+            _, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
             print("Voucher transferred successfully.")
         else:
-            # Extract the content from the data dictionary
-            content_json = json.loads(response[0]['content'])
-            # Access the 'error' field within the 'json' key
-            error_message = content_json['json']['error']
+            json_object, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
+            error_message = json_object.get('error')
             print(error_message)
-        
-    
+
+
     def use_voucher(self, code):
         use_json = {
             'user_name': self.username,
@@ -383,28 +467,31 @@ class ClientInterface:
             'operation': 'delete'
         }
         private_key = BA.str_to_key(self.privkey.decode())
-
-        #Get public key from server that is stored in the keys folder
-        server_public_key_bytes = BA.load_public_key('keys/public_server_key.key')
-        server_public_key = BA.str_to_key(server_public_key_bytes.decode())
+        server_public_key = BA.str_to_key(self.server_pubkey.decode())
         
         data = BA.encrypt_json(use_json, private_key, server_public_key, sections_to_encrypt=['code'])
         response = https_post_requests(self.base_url + '/vouchers', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
         if response[1] == 200:
+            _, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
             print("Voucher used successfully.")
         else:
-            # Extract the content from the data dictionary
-            content_json = json.loads(response[0]['content'])
-            error_message = content_json['json']['error']
+            json_object, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
+            error_message = json_object.get('error')
             print(error_message)
+
+    # --- REVIEW ---
 
     def write_review(self, restaurantId, score, comment):
         private_key = BA.str_to_key(self.privkey.decode())
+        server_public_key = BA.str_to_key(self.server_pubkey.decode())
         review = {
             'user_name': self.username,
             'score': score,
             'comment': comment
         }
+        review = BA.encrypt_json(review, private_key, None)
         write_json = {
             'user_name': self.username,
             'restaurant_id': restaurantId,
@@ -414,40 +501,55 @@ class ClientInterface:
         data = BA.encrypt_json(write_json, private_key, None)
         response = https_post_requests(self.base_url + '/reviews', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
         if response[1] == 201:
+            _, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
             print("Review created successfully.")
         else:
-            content_json = json.loads(response[0]['content'])
-            error_message = content_json['json']['error']
+            json_object, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
+            error_message = json_object.get('error')
             print(error_message)
-    
+
+
     def read_own_reviews(self):
         read_json = {
             'user_name': self.username,
             'operation': 'list'
         }
         private_key = BA.str_to_key(self.privkey.decode())
+        server_public_key = BA.str_to_key(self.server_pubkey.decode())
+
         data = BA.encrypt_json(read_json, private_key, None)
         response = https_post_requests(self.base_url + '/reviews', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
         if response[1] == 200:
-            content_json = json.loads(response[0]['content'])
-            reviews = content_json['json']['reviews']
+            json_object, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
+            
+            reviews = json_object.get('reviews')
+            if reviews is None:
+                print("No reviews found.")
+                return
             for review in reviews:
-                score = review['review']['score']
-                comment = review['review']['comment']
+                rev, _ = BA.decrypt_json(review['review'], server_public_key, private_key, freshness_check=False)
+                score = rev.get('score')
+                comment = rev.get('comment')
                 print("\nReview_Score: " + score + "| Review_Comment: " + comment + "| Restaurant: " + str(review['restaurant_id']) + "\n")
         else:
-            content_json = json.loads(response[0]['content'])
-            error_message = content_json['json']['error']
+            json_object, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
+            error_message = json_object.get('error')
             print(error_message)
 
 
     def update_review(self, restaurantId, score, comment):
         private_key = BA.str_to_key(self.privkey.decode())
+        server_public_key = BA.str_to_key(self.server_pubkey.decode())
         review = {
             'user_name': self.username,
             'score': score,
             'comment': comment
         }
+        review = BA.encrypt_json(review, private_key, None)
         update_json = {
             'user_name': self.username,
             'restaurant_id': restaurantId,
@@ -458,11 +560,15 @@ class ClientInterface:
         data = BA.encrypt_json(update_json, private_key, None)
         response = https_post_requests(self.base_url + '/reviews', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
         if response[1] == 200:
+            _, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
             print("Review updated successfully.")
         else:
-            content_json = json.loads(response[0]['content'])
-            error_message = content_json['json']['error']
+            json_object, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
+            error_message = json_object.get('error')
             print(error_message)
+
 
     def delete_review(self, restaurantId):
         delete_json = {
@@ -471,15 +577,22 @@ class ClientInterface:
             'operation': 'delete'
         }
         private_key = BA.str_to_key(self.privkey.decode())
+        server_public_key = BA.str_to_key(self.server_pubkey.decode())
+
         data = BA.encrypt_json(delete_json, private_key, None)
         response = https_post_requests(self.base_url + '/reviews', data, self.certificate_client_path, self.key_path, self.certificate_server_path)
         if response[1] == 200:
+            _, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
             print("Review deleted successfully.")
         else:
-            content_json = json.loads(response[0]['content'])
-            error_message = content_json['json']['error']
+            json_object, nonce = BA.decrypt_json(response[0], server_public_key, private_key, seen_nonces=get_seen_nonces())
+            update_seen_nonces(nonce)
+            error_message = json_object.get('error')
             print(error_message)    
-       
+
+    # --- INTERFACE ---
+
     def help_command_client(self):
         print("Available commands:")
         print("1.  delete self")
@@ -496,7 +609,8 @@ class ClientInterface:
         print("12. update review")
         print("13. delete review")
         print("14. exit")
-    
+
+
     def help_command_admin(self):
         print("Available commands:")
         print("1.   list users")
@@ -510,8 +624,8 @@ class ClientInterface:
         print("9.   create voucher")
         print("10.  exit")
 
-    def clientMenu(self):
 
+    def clientMenu(self):
         while(True):
             self.help_command_client()
 
@@ -578,6 +692,7 @@ class ClientInterface:
             else:
                 print("Invalid choice. Please try again.")
 
+
     def adminMenu(self):
         while(True):
 
@@ -633,7 +748,8 @@ class ClientInterface:
 
             else:
                 print("Invalid choice. Please try again.")
-    
+
+
     def registerLogic(self):
         self.register_user()
         if(self.username == "admin"):
@@ -641,7 +757,7 @@ class ClientInterface:
         else:
             self.clientMenu()
 
-    
+
     def loginLogic(self):
         if(os.path.isfile('keys/' + self.username + '.pubkey') and os.path.isfile('keys/' + self.username + '.privkey')):
             self.login_user()
@@ -652,6 +768,7 @@ class ClientInterface:
         else:
             print("User not registered. Please register first.")
             self.InterfaceMenu()
+
 
     def InterfaceMenu(self):
         print("1. Login")
@@ -668,7 +785,7 @@ class ClientInterface:
             print("Invalid choice. Please try again.")
             self.InterfaceMenu()
 
-   
+
 
 if __name__ == "__main__":
     base_url = "https://192.168.2.0:5000/api"  # Replace with your actual base URL
@@ -676,8 +793,8 @@ if __name__ == "__main__":
     certificate_server_path = "certificate/certificate_server.pem"
     certificate_client_path = "certificate/cert.pem"
     key_path = "certificate/key.pem"
-    username = input("Enter your username: ")
-    client = ClientInterface(base_url, username, certificate_server_path, certificate_client_path, key_path)
-    client.InterfaceMenu()
+    server_public_key_path = "keys/public_server_key.key"
 
-   
+    username = input("Enter your username: ")
+    client = ClientInterface(base_url, username, certificate_server_path, certificate_client_path, key_path, server_public_key_path)
+    client.InterfaceMenu()
