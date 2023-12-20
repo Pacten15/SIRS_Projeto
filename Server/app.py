@@ -197,8 +197,8 @@ def api_restaurant():
         with database, database.cursor() as db:
             db.execute("SELECT review FROM ba_reviews WHERE restaurant_id = (%s);", (message['id'],))
             reviews = db.fetchall()
-        
-        restaurant['reviews'] = [json.loads(review) for review in reviews]
+        print(reviews)
+        restaurant['reviews'] = [{"review": review} for review in reviews]
 
         return send_json_response({"restaurantInfo": result[0] }, 200, user_name, sections_to_encrypt=['mealVouchers'])
 
@@ -317,11 +317,12 @@ def api_users():
 
         if 'user_name' not in message:
             return send_json_response({"error": "Missing user_name"}, 400)
-        elif 'user_name' == "admin":
-            if 'user_name_to_delete' == "admin":
+        elif message['user_name'] == "admin":
+            if message['user_name_to_delete'] == "admin":
                 return send_json_response({"error": "Cannot delete admin"}, 403)
-        elif 'user_name' != "admin" and message['user_name_to_delete'] != message['user_name']:
+        elif message['user_name'] != "admin" and message['user_name_to_delete'] != message['user_name']:
             return send_json_response({"error": "Cannot delete other users as a user"}, 403)
+    
         cached_users.pop(message['user_name_to_delete'], None)
 
         with database, database.cursor() as db:
@@ -348,13 +349,12 @@ def api_vouchers():
         if user_name != "admin":
             return send_json_response({"error": "Only admin can add vouchers"}, 403)
 
-        if 'code' not in message or 'description' not in message or 'restaurant_id' not in message:
+        if 'user_name_voucher' not in message or 'code' not in message or 'description' not in message or 'restaurant_id' not in message:
             return send_json_response({"error": "Missing code, description or restaurant_id"}, 400)
         
         with database, database.cursor() as db:
             db.execute("INSERT INTO ba_vouchers (code, description, restaurant_id, user_name) VALUES (%s, %s, %s, %s);",
-                       (message['code'], message['description'], message['restaurant_id'], user_name))
-
+                       (message['code'], message['description'], message['restaurant_id'], message['user_name_voucher']))
         return send_json_response({}, 201)
 
     # ----- LIST -----
@@ -371,10 +371,12 @@ def api_vouchers():
     if message['operation'] == 'update':
         if 'new_user' not in message:
             return send_json_response({"error": "Missing new_user"}, 400)
+        elif 'code' not in message:
+            return send_json_response({"error": "Missing code"}, 400)
 
         with database, database.cursor() as db:
-            db.execute("UPDATE ba_vouchers SET user_name = (%s) WHERE user_name = (%s);",
-                       (message['new_user'], user_name))
+            db.execute("UPDATE ba_vouchers SET user_name = (%s) WHERE user_name = (%s) AND code = (%s);",
+                       (message['new_user'], user_name, message['code']))
 
         return send_json_response({}, 200)
 
@@ -422,17 +424,19 @@ def api_reviews():
             db.execute("SELECT review, restaurant_id FROM ba_reviews WHERE user_name = (%s);", (user_name,))
             reviews = db.fetchall()
 
-        return send_json_response({"reviews": [{"review": json.loads(review), "restaurant_id": restaurant_id} for review, restaurant_id in reviews]}, 200)
+        return send_json_response({"reviews": [{"review": review, "restaurant_id": restaurant_id} for review, restaurant_id in reviews]}, 200)
 
     # ----- UPDATE -----
 
     if message['operation'] == 'update':
         if 'review' not in message:
             return send_json_response({"error": "Missing review"}, 400)
+        if 'restaurant_id' not in message:
+            return send_json_response({"error": "Missing restaurant_id"}, 400)
 
         with database, database.cursor() as db:
-            db.execute("UPDATE ba_reviews SET review = (%s) WHERE user_name = (%s);",
-                       (json.dumps(message['review']), user_name))
+            db.execute("UPDATE ba_reviews SET review = (%s) WHERE user_name = (%s) AND restaurant_id = (%s);",
+                       (json.dumps(message['review']), user_name, message['restaurant_id']))
 
         return send_json_response({}, 200)
 
