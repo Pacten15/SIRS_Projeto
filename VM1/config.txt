@@ -74,3 +74,7 @@ Para aceder à base de dados:
 
 
 
+After executing the script turn off the VM and configure the network in the virtual box software and run the VM again so the configuration of the Interfaces is applied.
+
+
+
