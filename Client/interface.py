@@ -789,7 +789,7 @@ class ClientInterface:
 
 
 if __name__ == "__main__":
-    base_url = "https://192.168.2.0:5000/api"  # Replace with your actual base URL
+    base_url = "https://192.168.1.254:443/api"  # Replace with your actual base URL
     # Specify the path to your certificate file
     certificate_server_path = "certificate/certificate_server.pem"
     certificate_client_path = "certificate/cert.pem"

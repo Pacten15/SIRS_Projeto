@@ -26,7 +26,7 @@ tunnel =  SSHTunnelForwarder(
 
 tunnel.start()
 
-database = psycopg2.connect(host="192.168.0.100", database="sirs_bombappetit", user="sirs_dbadmin", password="sirs_dbpassword")
+database = psycopg2.connect(host=tunnel.local_bind_host, port = tunnel.local_bind_port,  database="sirs_bombappetit", user="sirs_dbadmin", password="sirs_dbpassword")
 CREATE_TABLES = """
                 CREATE TABLE IF NOT EXISTS ba_restaurants (
                         id              SERIAL PRIMARY KEY,
@@ -457,4 +457,4 @@ def api_reviews():
 
 if __name__ == '__main__':
     # Enable server-side authentication
-    app.run(host='192.168.2.0', port=5000, ssl_context=('keys/certificate_server.pem', 'keys/private_server_key.pem'))
+    app.run(host='192.168.1.254', port=443, ssl_context=('keys/certificate_server.pem', 'keys/private_server_key.pem'))
