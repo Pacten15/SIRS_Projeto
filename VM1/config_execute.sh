@@ -14,6 +14,8 @@ sudo -u postgres psql -c "CREATE DATABASE sirs_bombappetit WITH OWNER sirs_dbadm
 
 sudo systemctl enable ssh
 
+sudo apt update
+
 sudo apt install ufw
 
 sudo ufw enable

@@ -4,6 +4,8 @@ pip install -r ../requirements.txt
 
 sudo cp interfaces /etc/network/interfaces
 
+sudo apt update
+
 sudo apt install ufw
 
 sudo ufw enable
