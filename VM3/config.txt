@@ -29,4 +29,24 @@ Change interfaces by changing file in path /etc/network/interfaces:
     	address 10.0.5.2
     	gateway 8.8.8.8
 
+
+Install ufw and Define the firewall rules using it:
+
+sudo apt install ufw
+
+sudo ufw enable
+
+sudo ufw default deny forward
+
+sudo ufw default deny route
+
+sudo ufw allow from any to 192.168.2.0 port 443
+
+sudo ufw route allow from any to 192.168.1.254 port 443
+
+sudo ufw route allow from 192.168.1.254 to 192.168.0.100 port 22
+
+
+
 After executing the script turn off the VM and configure the network in the virtual box software and run the VM again so the configuration of the Interfaces is applied.
+

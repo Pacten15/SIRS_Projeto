@@ -31,6 +31,18 @@ Change interfaces by changing file in path /etc/network/interfaces:
     	netmask 255.255.255.0
     	gateway 8.8.8.8
 
+Configure firewall for VM1 using ufw:
+
+sudo apt install ufw
+
+sudo ufw enable
+
+sudo ufw default deny forward
+
+sudo ufw default deny route
+
+sudo ufw allow from any to 192.168.1.254 port 443
+
 After executing the script turn off the VM and configure the network in the virtual box software and run the VM again so the configuration of the Interfaces is applied.
 
 

@@ -14,3 +14,13 @@ sudo -u postgres psql -c "CREATE DATABASE sirs_bombappetit WITH OWNER sirs_dbadm
 
 sudo systemctl enable ssh
 
+sudo apt install ufw
+
+sudo ufw enable
+
+sudo ufw default deny forward
+
+sudo ufw default deny route
+
+sudo ufw allow from 192.168.1.254 to 192.168.0.100 port 22
+
