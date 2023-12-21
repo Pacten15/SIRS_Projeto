@@ -81,8 +81,6 @@ sudo ufw enable
 
 sudo ufw default deny forward
 
-sudo ufw default deny route
-
 sudo ufw allow from 192.168.1.254 to 192.168.0.100 port 22
 
 After executing the script turn off the VM and configure the network in the virtual box software and run the VM again so the configuration of the Interfaces is applied.
